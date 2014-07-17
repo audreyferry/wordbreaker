@@ -9,6 +9,7 @@ import string
 import copy
 import math
 from latexTable import MakeLatexTable
+import pdb
 
 verboseflag = False
 
@@ -66,7 +67,7 @@ class Lexicon:
 				del self.m_EntryDict[key]
 	# ---------------------------------------------------------#
 	def ReadCorpus(self, infilename):
-		print "Name of data file: ", infilename
+		print "\nName of data file: ", infilename
 		if not os.path.isfile(infilename):
 			print "Warning: ", infilename, " does not exist."
 		if g_encoding == "utf8":
@@ -87,7 +88,7 @@ class Lexicon:
 		self.ComputeDictFrequencies()
 	# ---------------------------------------------------------#
 	def ReadBrokenCorpus(self, infilename, numberoflines= 0):
-		print "Name of data file: ", infilename
+		print "\nName of data file: ", infilename
 		if not os.path.isfile(infilename):
 			print "Warning: ", infilename, " does not exist."
 		if g_encoding == "utf8":
@@ -125,6 +126,12 @@ class Lexicon:
 			self.m_BreakPointList.append(breakpoint_list)
 		self.m_SizeOfLongestEntry = 1	
 		self.ComputeDictFrequencies()
+		
+		##RECORD THE TRUE DICTIONARY
+		#print >>outfile, "\n\nTRUE DICTIONARY\n"
+		#for word in sorted(self.m_TrueDictionary.iterkeys()):
+		#    print >>outfile,  "%20s %10s" % (word, "{:,}".format(self.m_TrueDictionary[word]))
+ 
 # ---------------------------------------------------------#
 	def ComputeDictFrequencies(self):
 		TotalCount = 0
@@ -150,8 +157,8 @@ class Lexicon:
 				self.m_NumberOfHypothesizedRunningWords += 1
 		self.FilterZeroCountEntries(current_iteration)
 		self.ComputeDictFrequencies()
-		print "\nCorpus cost: ", "{:,}".format(self.m_CorpusCost)
-		print >>outfile, "\nCorpus cost: ", "{:,}".format(self.m_CorpusCost)
+		print "Corpus cost: ", "{:,}".format(self.m_CorpusCost)
+		print >>outfile, "Corpus cost: ", "{:,}".format(self.m_CorpusCost)
 		return  
 # ---------------------------------------------------------#		 	 
 	def PrintParsedCorpus(self,outfile):
@@ -234,7 +241,7 @@ class Lexicon:
 		latex_data.append("piece   count   status")
 		for nominee, count in NomineeList:
 			self.AddEntry(nominee,count)
-			print "(", nominee, "{:,}".format(count),")",
+			print "[", nominee, "{:,}".format(count),"]"     #,  s
 			latex_data.append(nominee +  "\t" + "{:,}".format(count) )
 		MakeLatexTable(latex_data,outfile)
 		self.ComputeDictFrequencies()
@@ -411,9 +418,9 @@ class Lexicon:
 		# the following calculations are precision and recall *for breaks* (not for morphemes)
 		total_break_precision = float(total_true_positive_for_break) /  total_number_of_hypothesized_words 
 		total_break_recall    = float(total_true_positive_for_break) /  total_number_of_true_words 	
-		print >>outfile, "\n\n***\n"
-		print >>outfile, "Precision", total_break_precision, "recall", total_break_recall
 		print "Precision  %6.4f; Recall  %6.4f" %(total_break_precision ,total_break_recall)
+		print >>outfile, "Precision", total_break_precision, "recall", total_break_recall
+		print >>outfile, "\n***"
 		self.m_PrecisionRecallHistory.append((iteration_number,  total_break_precision,total_break_recall))
 
 		# precision for word discovery:
@@ -453,7 +460,7 @@ def PrintList(my_list, outfile):
 
 total_word_count_in_parse =0
 g_encoding =  "asci"  
-numberofcycles = 11
+numberofcycles = 4    #101    #26    #11
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
@@ -462,20 +469,30 @@ outfile 	= open (outfilename, "w")
 
 current_iteration = 0	
 this_lexicon = Lexicon()
-this_lexicon.ReadBrokenCorpus (corpusfilename, numberoflines)
+this_lexicon.ReadBrokenCorpus (corpusfilename, numberoflines)   # audrey 2014_07_04. Note that numberoflines == 0, so all lines get read. 
 this_lexicon.ParseCorpus (outfile, current_iteration)
 
 
 for current_iteration in range(1, numberofcycles):
-	print "\n Iteration number", current_iteration
-	print >>outfile, "\n\n Iteration number", current_iteration
+	print "\nIteration number", current_iteration
+	print >>outfile, "\n\nIteration number", current_iteration
 	this_lexicon.GenerateCandidates(howmanycandidatesperiteration, outfile)
 	this_lexicon.ParseCorpus (outfile, current_iteration)
 	this_lexicon.PrecisionRecall(current_iteration, outfile,total_word_count_in_parse)
 	
-this_lexicon.PrintParsedCorpus(outfile)
+# this_lexicon.PrintParsedCorpus(outfile)     # COMMENTED OUT  apf 2014_05_29
+print >>outfile, "\n\nLEXICON WITH COUNT_REGISTER\n"
 this_lexicon.PrintLexicon(outfile)
-this_lexicon.PrintPrecisionRecall(outfile) 	 
+this_lexicon.PrintPrecisionRecall(outfile)
+
+# EXAMPLE apf 2014_05_20 #
+print >>outfile, "\n\n--------------------\n\n"
+print >>outfile, "EXAMPLE: Parse 'therentisdue'"
+verboseflag = True
+this_lexicon.ParseWord("therentisdue", outfile);
+# ------------------ #
+
+print
 outfile.close()
 
 
