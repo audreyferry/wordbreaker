@@ -112,8 +112,18 @@ class Lexicon:
 					self.m_TrueDictionary[word] += 1
 				this_line += word
 				breakpoint_list.append(len(this_line))	
-			self. m_Corpus.append(this_line)			 		 
-			for letter in line:
+			self.m_Corpus.append(this_line)	
+			
+			#for letter in line:       # audrey 2014_07_10. Replace "line" by "this_line" (as below).
+                                       # Without this change, every occurrence of '\n', '\r', and ' '
+                                       # is counted, which affects the frequency, hence the plog, of 
+                                       # the other lexicon items--resulting in an inflated initial
+                                       # corpus cost. However, since these three whitespace characters
+                                       # themselves never appear in the parse, they get removed
+                                       # from the lexicon anyway at the end of the "zeroth" stage. 
+                                       # So calculation of corpus cost in further iterations is unaffected.
+                                       # NOTE - probably zeroth stage processing can be shortened.
+			for letter in this_line:
 				if letter not in self.m_EntryDict:
 					this_lexicon_entry = LexiconEntry()
 					this_lexicon_entry.m_Key = letter
@@ -314,8 +324,11 @@ class Lexicon:
 
 # ---------------------------------------------------------#		
 	def PrintLexicon(self, outfile):
+	    print >>outfile, "\n\nLEXICON WITH COUNT_REGISTER"
 		for key in sorted(self.m_EntryDict.iterkeys()):			 
-			self.m_EntryDict[key].Display(outfile) 
+			self.m_EntryDict[key].Display(outfile)
+			
+		print >>outfile, "\n\nDELETION LIST"	
 		for iteration, key in self.m_DeletionList:
 			print >>outfile, iteration, key
 
@@ -481,7 +494,6 @@ for current_iteration in range(1, numberofcycles):
 	this_lexicon.PrecisionRecall(current_iteration, outfile,total_word_count_in_parse)
 	
 # this_lexicon.PrintParsedCorpus(outfile)     # COMMENTED OUT  apf 2014_05_29
-print >>outfile, "\n\nLEXICON WITH COUNT_REGISTER\n"
 this_lexicon.PrintLexicon(outfile)
 this_lexicon.PrintPrecisionRecall(outfile)
 
