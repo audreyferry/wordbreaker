@@ -21,12 +21,13 @@ class LexiconEntry:
 		self.m_Key = key              # m_Key, m_Subwords are fixed
 		self.m_Count = count          # m_Count, m_Frequency, m_Extwords are recalculated from scratch at each iteration 
 		self.m_Frequency= 0.0         # m_CountRegister gets extended when needed to record changes
-		self.m_Subwords = ()
+		self.m_Subword0 = ""
+		self.m_Subword1 = ""
 		self.m_Extwords = list()      
 		self.m_CountRegister = list()
 		
 		
-	def RecordCountAndTrace(self, current_iteration):
+	def UpdateRegister(self, current_iteration):
 		if len(self.m_CountRegister) > 0:
 			last_count = self.m_CountRegister[-1][1]
 			if self.m_Count != last_count or self.m_Extwords != []:
@@ -59,9 +60,9 @@ class Lexicon:
 		self.m_DeletionDict = dict()  # They never stop getting nominated.
 		self.m_PrecisionRecallHistory = list()
 	# ---------------------------------------------------------#
-	def AddEntry(self,key,count):
-		this_entry = LexiconEntry(key,count)
-		self.m_EntryDict[key] = this_entry
+	def AddEntry(self,key,new_entry):    #was AddEntry(self,key,count)
+		#this_entry = LexiconEntry(key,count)
+		self.m_EntryDict[key] = new_entry
 		if len(key) > self.m_SizeOfLongestEntry:
 			self.m_SizeOfLongestEntry = len(key)
 	# ---------------------------------------------------------#	
@@ -72,9 +73,9 @@ class Lexicon:
 				self.m_DeletionDict[key] = iteration_number   # was 1
 				del self.m_EntryDict[key]
 	# ---------------------------------------------------------#
-	def UpdateRegister(self, iteration_number):
+	def TrackChanges(self, iteration_number):
 	        for key, entry in self.m_EntryDict.iteritems():
-	               entry.RecordCountAndTrace(iteration_number)
+	               entry.UpdateRegister(iteration_number)
 	# ---------------------------------------------------------#
 	#def ReadCorpus(self, infilename):  #2014_07_22  Not in use. If used, note ComputeDictFrequencies(X) needs total of m_Counts over all lexicon entries
 	#	print "\nName of data file: ", infilename
@@ -135,32 +136,32 @@ class Lexicon:
                                        # NOTE - probably zeroth stage processing can be shortened.
 			for letter in this_line:
 				if letter not in self.m_EntryDict:
-					this_lexicon_entry = LexiconEntry()
-					this_lexicon_entry.m_Key = letter
-					this_lexicon_entry.m_Count = 1
-					self.m_EntryDict[letter] = this_lexicon_entry					 
+					this_entry = LexiconEntry()
+					this_entry.m_Key = letter
+					this_entry.m_Count = 1
+					self.AddEntry(letter, this_entry)
 				else:
 					self.m_EntryDict[letter].m_Count += 1			 
 			if numberoflines > 0 and len(self.m_Corpus) > numberoflines:
 				break		 
 			self.m_BreakPointList.append(breakpoint_list)
-		
-		self.m_CorpusCost = 0.0	
+
+		for line in self.m_Corpus:
+			self.m_ParsedCorpus.append(list(line))    #Parsing is easy!
+
+		self.m_SizeOfLongestEntry = 1	
 		self.m_NumberOfHypothesizedRunningWords = 0
 		for key, entry in self.m_EntryDict.iteritems():	
-		        entry.m_CountRegister.append((0, entry.m_Count, []))  # as in RecordCountAndTrace - but pre-parse!	
 		        self.m_NumberOfHypothesizedRunningWords += entry.m_Count 	
-		self.m_SizeOfLongestEntry = 1	
-		#self.ComputeDictFrequencies()
+		        entry.m_CountRegister.append((0, entry.m_Count, []))  # as in UpdateRegister()
 		self.ComputeDictFrequenciesRelTokenCount(self.m_NumberOfHypothesizedRunningWords)
 		
+		self.m_CorpusCost = 0.0	
 		for key, entry in self.m_EntryDict.iteritems():
 			self.m_CorpusCost += entry.m_Count *  -1 * math.log(entry.m_Frequency)
 		print "Corpus cost: ", "{:,}".format(self.m_CorpusCost)
 		print >>outfile, "Corpus cost: ", "{:,}".format(self.m_CorpusCost)
 		
-		for line in self.m_Corpus:
-			self.m_ParsedCorpus.append(list(line))    #could do this in line loop above
 		
 		
 		##RECORD THE TRUE DICTIONARY
@@ -198,9 +199,10 @@ class Lexicon:
 			for word in parsed_line:
 				self.m_EntryDict[word].m_Count +=1
 				self.m_NumberOfHypothesizedRunningWords += 1
+
 		self.FilterZeroCountEntries(current_iteration)  #NOTE - Does not affect self.m_NumberOfHypothesizedRunningWords
-		#self.ComputeDictFrequencies()
 		self.ComputeDictFrequenciesRelTokenCount(self.m_NumberOfHypothesizedRunningWords)
+
 		print "Corpus cost: ", "{:,}".format(self.m_CorpusCost)
 		print >>outfile, "Corpus cost: ", "{:,}".format(self.m_CorpusCost)
 		return  
@@ -266,27 +268,33 @@ class Lexicon:
 	        for word, lexicon_entry in self.m_EntryDict.iteritems():
 	    	        lexicon_entry.m_Extwords = [] 
 	    	
-		Nominees = dict()      # key is the new word, value is triple consisting of count and the two component words
+		Nominees = dict()      # key is the new word, value is a LexiconEntry object
 		NomineeList = list()
 		for parsed_line in self.m_ParsedCorpus:	 
 			for wordno in range(len(parsed_line)-1):
-			        word1 = parsed_line[wordno]
-			        word2 = parsed_line[wordno + 1]
-				candidate = word1 + word2				 		 
+			        word0 = parsed_line[wordno]
+			        word1 = parsed_line[wordno + 1]
+				candidate = word0 + word1				 		 
 				if candidate in self.m_EntryDict:					 
 					continue										 
 				if candidate in Nominees:
-				        count = Nominees[candidate][0]
-				        count += 1
-					Nominees[candidate] = (count, word1, word2)
+					Nominees[candidate].m_Count += 1
 				else:
-					Nominees[candidate] = (1, word1, word2)					 
-		EntireNomineeList = sorted(Nominees.iteritems(),key=operator.itemgetter(1),reverse=True)
-		for nominee, info in EntireNomineeList:
+					this_entry = LexiconEntry(candidate, 1)
+					this_entry.m_Subword0 = word0
+					this_entry.m_Subword1 = word1
+					Nominees[candidate] = this_entry
+
+		SortableNominees = dict()
+		for candidate, lex_entry in Nominees.iteritems():
+			SortableNominees[candidate] = (lex_entry.m_Count, lex_entry)
+		EntireNomineeList = sorted(SortableNominees.iteritems(),key=operator.itemgetter(1), reverse=True)
+
+		for nominee, sortkey_lexentry in EntireNomineeList:
 			if nominee  in self.m_DeletionDict:				 
 				continue
 			else:				 
-				NomineeList.append((nominee,info))
+				NomineeList.append((nominee, sortkey_lexentry[1]))
 			if len(NomineeList) == howmany:
 				break
 				
@@ -294,25 +302,23 @@ class Lexicon:
 		TotalNomCounts = 0
 		latex_data= list()
 		latex_data.append("piece   count   subword    subword   status")
-		for nominee, info in NomineeList:
+		for nominee, entry in NomineeList:
 		        # for the new word
-			self.AddEntry(nominee,info[0])  # SHOULD WE ADD SUBWORDS HERE?
-			self.m_EntryDict[nominee].m_Subwords = (info[1], info[2])
-	                self.m_EntryDict[nominee].m_CountRegister.append((current_iteration, info[0], []))  # as in RecordCountAndTrace - but pre-parse!   
+			entry.m_CountRegister.append((current_iteration, entry.m_Count, []))  # as in UpdateRegister() - only this is pre-parse!
+			self.AddEntry(nominee,entry) 
 			
 			# for the trace
-	                self.m_EntryDict[info[1]].m_Extwords.append(nominee)
-	                self.m_EntryDict[info[2]].m_Extwords.append(nominee)
+	                self.m_EntryDict[entry.m_Subword0].m_Extwords.append(nominee)
+	                self.m_EntryDict[entry.m_Subword1].m_Extwords.append(nominee)
 			                                                                                   
 			# for display			
-			print "[", nominee, '{:,} {} {}'.format(*info),"]"
-#			print "[", nominee, info[0], info[1], info[2],"]"
-			latex_data.append(nominee +  "\t" + '{:,} {} {}'.format(*info) )
+			print "[", nominee, '{:,} {} {}'.format(entry.m_Count, entry.m_Subword0, entry.m_Subword1),"]"
+#			print "[", nominee, '{:,}'.format(entry.m_Count), entry.m_Subword0, entry.m_Subword1,"]"
+			latex_data.append(nominee +  "\t" + '{:,} {} {}'.format(entry.m_Count, entry.m_Subword0, entry.m_Subword1) )
 			
-		        TotalNomCounts += info[0]
+		        TotalNomCounts += entry.m_Count
 
 		MakeLatexTable(latex_data,outfile)
-		#self.ComputeDictFrequencies()
 		self.ComputeDictFrequenciesRelTokenCount(self.m_NumberOfHypothesizedRunningWords + TotalNomCounts)
 		return NomineeList      # NOTE THAT THE RETURN VALUE IS NOT USED
 
@@ -554,7 +560,7 @@ for current_iteration in range(1, numberofcycles):
 	this_lexicon.GenerateCandidates(howmanycandidatesperiteration, outfile, current_iteration)
 	this_lexicon.ParseCorpus (outfile, current_iteration)
 	this_lexicon.PrecisionRecall(current_iteration, outfile,total_word_count_in_parse)
-	this_lexicon.UpdateRegister(current_iteration)
+	this_lexicon.TrackChanges(current_iteration)
 	
 # this_lexicon.PrintParsedCorpus(outfile)     # COMMENTED OUT  apf 2014_05_29
 this_lexicon.PrintLexicon(outfile)
