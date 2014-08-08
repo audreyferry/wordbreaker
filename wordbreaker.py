@@ -10,6 +10,7 @@ import copy
 import math
 from latexTable import MakeLatexTable
 import pdb
+import pickle
 
 verboseflag = False
 
@@ -63,6 +64,55 @@ class Lexicon:
 		self.m_NumberOfTrueRunningWords = 0
 		self.m_BreakPointList = list()
 		self.m_PrecisionRecallHistory = list()
+	# ---------------------------------------------------------#
+	def save_obj(self, obj, name ):
+		fp = open(name, 'wb')
+		pickle.dump(obj, fp, pickle.HIGHEST_PROTOCOL)
+		fp.close()
+		
+	#def load_obj(self, obj, name ):    #CALLING THIS DOESN'T WORK; maybe a deep copy problem?
+		#fp = open(name, 'rb')
+		#obj = pickle.load(fp)
+		#fp.close()
+
+	def SaveState(self):
+		self.save_obj(self.m_EntryDict, 'Pkl_EntryDict.p')
+		self.save_obj(self.m_SizeOfLongestEntry, 'Pkl_SizeOfLongestEntry.p')
+		self.save_obj(self.m_DeletionDict, 'Pkl_DelectionDict.p')
+		self.save_obj(self.m_Corpus, 'Pkl_Corpus.p')
+		self.save_obj(self.m_ParsedCorpus, 'Pkl_ParsedCorpus.p')
+		self.save_obj(self.m_TotalParseCount, 'Pkl_TotalParseCount.p')
+		self.save_obj(self.m_TotalReprCount, 'Pkl_TotalReprCount.p')
+		self.save_obj(self.m_BreakPointList, 'Pkl_BreakPointList.p')
+		self.save_obj(self.m_PrecisionRecallHistory, 'Pkl_PrecisionRecallHistory.p')
+		
+	def LoadState(self, intended_prev_iteration):
+		fp = open('Pkl_PrecisionRecallHistory.p', 'rb')
+		self.m_PrecisionRecallHistory = pickle.load(fp)
+		# self.PrintPrecisionRecall(outfile)
+		last_saved_iteration = self.m_PrecisionRecallHistory[-1][0]
+		if last_saved_iteration != intended_prev_iteration:
+			print "Last saved iteration number was %d. Set 'prev_iteration_number' to match!" % last_saved_iteration
+			sys.exit(0)
+			
+		fp = open('Pkl_EntryDict.p', 'rb')
+		self.m_EntryDict = pickle.load(fp)
+		fp = open('Pkl_SizeOfLongestEntry.p', 'rb')
+		self.m_SizeOfLongestEntry = pickle.load(fp)
+		fp = open('Pkl_DelectionDict.p', 'rb')
+		self.m_DelectionDict = pickle.load(fp)
+		fp = open('Pkl_Corpus.p', 'rb')
+		self.m_Corpus = pickle.load(fp)
+		fp = open('Pkl_ParsedCorpus.p', 'rb')
+		self.m_ParsedCorpus = pickle.load(fp)
+		fp = open('Pkl_TotalParseCount.p', 'rb')
+		self.m_TotalParseCount = pickle.load(fp)
+		fp = open('Pkl_TotalReprCount.p', 'rb')
+		self.m_TotalReprCount = pickle.load(fp)
+		fp = open('Pkl_BreakPointList.p', 'rb')
+		self.m_BreakPointList = pickle.load(fp)
+
+		
 	# ---------------------------------------------------------#
 	def AddEntry(self,key,new_entry):    #was AddEntry(self,key,count)
 		#this_entry = LexiconEntry(key,count)
@@ -136,6 +186,9 @@ class Lexicon:
 		for line in rawcorpus_list:						 	 
 			this_line = ""
 			breakpoint_list = list()
+			# LOWERCASE LOWERCASE LOWERCASE LOWERCASE LOWERCASE
+			#line = line.lower()
+			# LOWERCASE LOWERCASE LOWERCASE LOWERCASE LOWERCASE
 			line = line.replace('.', ' .').replace('?', ' ?')
 			line_list = line.split()
 			if len(line_list) <=  1:
@@ -606,26 +659,33 @@ def PrintList(my_list, outfile):
 		print >>outfile, item,  
 
 
-
+############ USER SETTINGS ##################
 total_word_count_in_parse =0
 g_encoding =  "asci"  
-numberofcycles = 4   #4    #101    #26    #11
+prev_iteration_number = 0    # Index of last saved iteration ('0' for fresh start)
+stop_iteration_number = 10   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
-outfilename = "wordbreaker-brownC-" + str(numberofcycles) + "i.txt" 	
+outfilename = "wordbreaker-brownC-" + str(prev_iteration_number+1) + "i.." + str(stop_iteration_number) + "i.txt"
 outfile 	= open (outfilename, "w")
+#############################################
+
+current_iteration = prev_iteration_number
+this_lexicon = Lexicon()
+
+if prev_iteration_number == 0:
+	this_lexicon.ReadBrokenCorpus (corpusfilename, numberoflines)   # audrey 2014_07_04. Note that numberoflines == 0, so all lines get read.
+	#this_lexicon.ParseCorpus (outfile, current_iteration)
+else:
+	print "LOADING SAVED STATE..."
+	this_lexicon.LoadState(prev_iteration_number)
+
 
 t_start = time.time()          # 2014_07_20
 print "\nt_start = ", t_start
 
-current_iteration = 0	
-this_lexicon = Lexicon()
-this_lexicon.ReadBrokenCorpus (corpusfilename, numberoflines)   # audrey 2014_07_04. Note that numberoflines == 0, so all lines get read. 
-#this_lexicon.ParseCorpus (outfile, current_iteration)
-
-
-for current_iteration in range(1, numberofcycles):
+for current_iteration in range(1+prev_iteration_number, 1+stop_iteration_number):
 	print "\nIteration number", current_iteration
 	print >>outfile, "\nIteration number", current_iteration
 	this_lexicon.GenerateCandidates(howmanycandidatesperiteration, outfile, current_iteration)
@@ -633,13 +693,13 @@ for current_iteration in range(1, numberofcycles):
 	this_lexicon.PrecisionRecall(current_iteration, outfile,total_word_count_in_parse)
 	this_lexicon.TrackChanges(current_iteration)
 	
-# this_lexicon.PrintParsedCorpus(outfile)     # COMMENTED OUT  apf 2014_05_29
+this_lexicon.PrintParsedCorpus(outfile)     # COMMENTED OUT  apf 2014_05_29
 this_lexicon.PrintLexicon(outfile)
 this_lexicon.PrintPrecisionRecall(outfile)
 
 t_end = time.time()
 print "\nt_end = ", t_end
-print >>outfile, "Elapsed wall time in seconds = ", t_end - t_start
+print >>outfile, "\nElapsed wall time in seconds = ", t_end - t_start
 
 # EXAMPLE apf 2014_05_20 #
 print >>outfile, "\n\n--------------------\n\n"
@@ -650,6 +710,9 @@ this_lexicon.ParseWord("therentisdue", outfile);
 
 print
 outfile.close()
+
+print "SAVING...Move to a separate labelled directory if desired to prevent subsequent overwriting"
+this_lexicon.SaveState()
 
 
 
