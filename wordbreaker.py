@@ -186,9 +186,11 @@ class Lexicon:
 		for line in rawcorpus_list:						 	 
 			this_line = ""
 			breakpoint_list = list()
+			
 			# LOWERCASE LOWERCASE LOWERCASE LOWERCASE LOWERCASE
-			line = line.lower()
+			#line = line.lower()
 			# LOWERCASE LOWERCASE LOWERCASE LOWERCASE LOWERCASE
+			
 			line = line.replace('.', ' .').replace('?', ' ?')
 			line_list = line.split()
 			if len(line_list) <=  1:
