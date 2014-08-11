@@ -78,7 +78,7 @@ class Lexicon:
 	def SaveState(self):
 		self.save_obj(self.m_EntryDict, 'Pkl_EntryDict.p')
 		self.save_obj(self.m_SizeOfLongestEntry, 'Pkl_SizeOfLongestEntry.p')
-		self.save_obj(self.m_DeletionDict, 'Pkl_DelectionDict.p')
+		self.save_obj(self.m_DeletionDict, 'Pkl_DeletionDict.p')
 		self.save_obj(self.m_Corpus, 'Pkl_Corpus.p')
 		self.save_obj(self.m_ParsedCorpus, 'Pkl_ParsedCorpus.p')
 		self.save_obj(self.m_TotalParseCount, 'Pkl_TotalParseCount.p')
@@ -99,8 +99,8 @@ class Lexicon:
 		self.m_EntryDict = pickle.load(fp)
 		fp = open('Pkl_SizeOfLongestEntry.p', 'rb')
 		self.m_SizeOfLongestEntry = pickle.load(fp)
-		fp = open('Pkl_DelectionDict.p', 'rb')
-		self.m_DelectionDict = pickle.load(fp)
+		fp = open('Pkl_DeletionDict.p', 'rb')
+		self.m_DeletionDict = pickle.load(fp)
 		fp = open('Pkl_Corpus.p', 'rb')
 		self.m_Corpus = pickle.load(fp)
 		fp = open('Pkl_ParsedCorpus.p', 'rb')
@@ -187,7 +187,7 @@ class Lexicon:
 			this_line = ""
 			breakpoint_list = list()
 			# LOWERCASE LOWERCASE LOWERCASE LOWERCASE LOWERCASE
-			#line = line.lower()
+			line = line.lower()
 			# LOWERCASE LOWERCASE LOWERCASE LOWERCASE LOWERCASE
 			line = line.replace('.', ' .').replace('?', ' ?')
 			line_list = line.split()
@@ -662,8 +662,8 @@ def PrintList(my_list, outfile):
 ############ USER SETTINGS ##################
 total_word_count_in_parse =0
 g_encoding =  "asci"  
-prev_iteration_number = 0    # Index of last saved iteration ('0' for fresh start)
-stop_iteration_number = 10   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
+prev_iteration_number = 505  # Index of last saved iteration ('0' for fresh start)
+stop_iteration_number = 506  # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
