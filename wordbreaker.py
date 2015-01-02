@@ -41,7 +41,12 @@ class LexiconEntry:
 
 
 	def Display(self, outfile):
-		print >>outfile, "%-20s" % self.m_Key
+		if self.m_Subwords == []:
+			print >>outfile, "%s" % self.m_Key
+		else:
+			# subword displayed here even if filtered from lexicon; 
+			# however repr counts are handled correctly (see FilterZeroCountEntries())
+			print >>outfile, "%s  %s/%s" % (self.m_Key, self.m_Subwords[0], self.m_Subwords[1])   
 		for iteration_number, parse_count, repr_count, newextwords in self.m_CountRegister:
 		        if newextwords == []:
 		        	print >>outfile, "%6i %10s %5s" % (iteration_number, '{:,}'.format(parse_count), '{:,}'.format(repr_count))
@@ -65,8 +70,8 @@ class Lexicon:
 		self.m_BreakPointList = list()
 		self.m_PrecisionRecallHistory = list()
 	# ---------------------------------------------------------#
-	def save_obj(self, obj, name ):
-		fp = open(name, 'wb')
+	def save_obj(self, obj, filename ):
+		fp = open(filename, 'wb')
 		pickle.dump(obj, fp, pickle.HIGHEST_PROTOCOL)
 		fp.close()
 		
@@ -124,8 +129,8 @@ class Lexicon:
 		for key, key_entry in self.m_EntryDict.items():
 			if key_entry.m_ParseCount == 0 and key_entry.m_ReprCount < 2:   # THIS IS A SIMPLE VERSION; ALSO, DO WE REALLY WANT TO DISALLOW ITS USE FOR THE FUTURE?
 				# First, maintain consistency of lexicon
-				for e in key_entry.m_Extwords:    # there's at most one
-					self.m_EntryDict[e].m_Subwords.remove(key)
+				#for e in key_entry.m_Extwords:    # there's at most one
+					#self.m_EntryDict[e].m_Subwords.remove(key)   # on second thought, retain the original component
 				for s in key_entry.m_Subwords:
 					s_entry = self.m_EntryDict[s]
 					if key in s_entry.m_Extwords:           # just being careful!
@@ -136,7 +141,7 @@ class Lexicon:
 						
 					for e in key_entry.m_Extwords:
 						e_entry = self.m_EntryDict[e]
-						e_entry.m_Subwords.append(s)
+						#e_entry.m_Subwords.append(s)
 						s_entry.m_Extwords.append(e)
 						s_entry.m_ReprCount += 1
 				
@@ -188,7 +193,7 @@ class Lexicon:
 			breakpoint_list = list()
 			
 			# LOWERCASE LOWERCASE LOWERCASE LOWERCASE LOWERCASE
-			#line = line.lower()
+			line = line.lower()
 			# LOWERCASE LOWERCASE LOWERCASE LOWERCASE LOWERCASE
 			
 			line = line.replace('.', ' .').replace('?', ' ?')
@@ -344,7 +349,10 @@ class Lexicon:
 				Piece = word[innerscan: outerscan]	 
 				if verboseflag: print >>outfile, " %5s"% Piece, 			 
 				if Piece in self.m_EntryDict:		
-					if verboseflag: print >>outfile,"   %5s" % "Yes.",		 
+					if verboseflag: print >>outfile,"   %5s" % "Yes.",	
+					
+					if Piece == word: continue        # TEMPORARY TO TEST "duringthepast"
+					
 					CompressedSizeFromInnerScanToOuterScan = -1 * math.log( self.m_EntryDict[Piece].m_Frequency )				
 					newvalue =  BestCompressedLength[innerscan]  + CompressedSizeFromInnerScanToOuterScan  
 					if verboseflag: print >>outfile,  " %7.3f bits" % (newvalue), 
@@ -664,8 +672,8 @@ def PrintList(my_list, outfile):
 ############ USER SETTINGS ##################
 total_word_count_in_parse =0
 g_encoding =  "asci"  
-prev_iteration_number = 505  # Index of last saved iteration ('0' for fresh start)
-stop_iteration_number = 506  # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
+prev_iteration_number = 0    # Index of last saved iteration ('0' for fresh start)
+stop_iteration_number = 23  # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
@@ -707,8 +715,16 @@ print >>outfile, "\nElapsed wall time in seconds = ", t_end - t_start
 print >>outfile, "\n\n--------------------\n\n"
 print >>outfile, "EXAMPLE: Parse 'therentisdue'"
 verboseflag = True
-this_lexicon.ParseWord("therentisdue", outfile);
+this_lexicon.ParseWord("therentisdue", outfile)
 # ------------------ #
+print >>outfile, "\n\n--------------------\n\n"
+print >>outfile, "EXAMPLE: Parse 'duringthepast'"
+this_lexicon.ParseWord("duringthepast", outfile)
+
+print >>outfile, "\n\n--------------------\n\n"
+print >>outfile, "EXAMPLE: Parse 'duringthe'"
+this_lexicon.ParseWord("duringthe", outfile)
+
 
 print
 outfile.close()
