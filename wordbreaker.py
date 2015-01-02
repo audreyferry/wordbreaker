@@ -41,17 +41,21 @@ class LexiconEntry:
 
 
 	def Display(self, outfile):
+		print >>outfile, "%s" % self.m_Key
+
 		if self.m_Subwords == []:
-			print >>outfile, "%s" % self.m_Key
+			print >>outfile, "%6i %10s %5s" % (self.m_CountRegister[0][0], '{:,}'.format(self.m_CountRegister[0][1]), '{:,}'.format(self.m_CountRegister[0][2]))
 		else:
-			# subword displayed here even if filtered from lexicon; 
-			# however repr counts are handled correctly (see FilterZeroCountEntries())
-			print >>outfile, "%s  %s/%s" % (self.m_Key, self.m_Subwords[0], self.m_Subwords[1])   
-		for iteration_number, parse_count, repr_count, newextwords in self.m_CountRegister:
+			print >>outfile, "%6i %10s %5s    %s/%s" % (self.m_CountRegister[0][0], '{:,}'.format(self.m_CountRegister[0][1]), '{:,}'.format(self.m_CountRegister[0][2]), self.m_Subwords[0], self.m_Subwords[1])
+                        # NOTE: component subwords are displayed here even if filtered from lexicon; 
+-                       # however repr counts are adjusted (see FilterZeroCountEntries())
+-  			
+		for iteration_number, parse_count, repr_count, newextwords in self.m_CountRegister[1:]:
 		        if newextwords == []:
 		        	print >>outfile, "%6i %10s %5s" % (iteration_number, '{:,}'.format(parse_count), '{:,}'.format(repr_count))
 		        else:    
 				print >>outfile, "%6i %10s %5s    %-100s" % (iteration_number, '{:,}'.format(parse_count),  '{:,}'.format(repr_count), '{}'.format(newextwords))
+
 # ---------------------------------------------------------#
 class Lexicon:
 	def __init__(self):
@@ -672,8 +676,8 @@ def PrintList(my_list, outfile):
 ############ USER SETTINGS ##################
 total_word_count_in_parse =0
 g_encoding =  "asci"  
-prev_iteration_number = 0    # Index of last saved iteration ('0' for fresh start)
-stop_iteration_number = 23  # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
+prev_iteration_number =  0   # Index of last saved iteration ('0' for fresh start)
+stop_iteration_number = 10   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
