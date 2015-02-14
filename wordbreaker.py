@@ -41,16 +41,14 @@ class LexiconEntry:
 
 
 	def Display(self, outfile):
-		print >>outfile, "%s" % self.m_Key
-
-		if self.m_Subwords == []:
-			print >>outfile, "%6i %10s %5s" % (self.m_CountRegister[0][0], '{:,}'.format(self.m_CountRegister[0][1]), '{:,}'.format(self.m_CountRegister[0][2]))
-		else:
-			print >>outfile, "%6i %10s %5s    %s/%s" % (self.m_CountRegister[0][0], '{:,}'.format(self.m_CountRegister[0][1]), '{:,}'.format(self.m_CountRegister[0][2]), self.m_Subwords[0], self.m_Subwords[1])
+		print >>outfile, "%s" % self.m_Key		
+		if len(self.m_Subwords) > 0:
+			expression = "/".join( self.m_Subwords )
+			print >>outfile, "%s" % expression
                         # NOTE: component subwords are displayed here even if filtered from lexicon; 
--                       # however repr counts are adjusted (see FilterZeroCountEntries())
--  			
-		for iteration_number, parse_count, repr_count, newextwords in self.m_CountRegister[1:]:
+			# however repr counts are adjusted (see FilterZeroCountEntries())
+  			
+		for iteration_number, parse_count, repr_count, newextwords in self.m_CountRegister:
 		        if newextwords == []:
 		        	print >>outfile, "%6i %10s %5s" % (iteration_number, '{:,}'.format(parse_count), '{:,}'.format(repr_count))
 		        else:    
@@ -134,20 +132,21 @@ class Lexicon:
 			if key_entry.m_ParseCount == 0 and key_entry.m_ReprCount < 2:   # THIS IS A SIMPLE VERSION; ALSO, DO WE REALLY WANT TO DISALLOW ITS USE FOR THE FUTURE?
 				# First, maintain consistency of lexicon
 				#for e in key_entry.m_Extwords:    # there's at most one
-					#self.m_EntryDict[e].m_Subwords.remove(key)   # on second thought, retain the original component
+					#self.m_EntryDict[e].m_Subwords.remove(key)   #on third thought, remember hap, perhap, perhaps # on second thought, retain the original component
 				for s in key_entry.m_Subwords:
-					s_entry = self.m_EntryDict[s]
-					if key in s_entry.m_Extwords:           # just being careful!
-						s_entry.m_Extwords.remove(key)
-					if key in s_entry.m_NewExtwords:
-						s_entry.m_NewExtwords.remove(key)
-					s_entry.m_ReprCount -= 1
+					if s in self.m_EntryDict:
+						s_entry = self.m_EntryDict[s]
+						if key in s_entry.m_Extwords:           # just being careful!
+							s_entry.m_Extwords.remove(key)
+						if key in s_entry.m_NewExtwords:
+							s_entry.m_NewExtwords.remove(key)
+						s_entry.m_ReprCount -= 1
 						
-					for e in key_entry.m_Extwords:
-						e_entry = self.m_EntryDict[e]
-						#e_entry.m_Subwords.append(s)
-						s_entry.m_Extwords.append(e)
-						s_entry.m_ReprCount += 1
+						for e in key_entry.m_Extwords:
+							e_entry = self.m_EntryDict[e]
+							#e_entry.m_Subwords.append(s)
+							s_entry.m_Extwords.append(e)
+							s_entry.m_ReprCount += 1
 				
 				# Then transfer this entry from the EntryDict to the DeletionDict
 				key_entry.UpdateRegister(iteration_number)      # so that this last stage is visible
@@ -451,7 +450,7 @@ class Lexicon:
 		        TotalNomPreParseCounts += entry.m_ParseCount
 
 		MakeLatexTable(latex_data,outfile)
-		self.ComputeDictFrequencies(self.m_TotalParseCount + self.m_TotalReprCount + TotalNomPreParseCounts)
+		self.ComputeDictFrequencies(self.m_TotalParseCount + self.m_TotalReprCount + TotalNomPreParseCounts)  #also need more new ReprCounts created above?
 		
 		self.m_LexiconCost = 0.0	
 		for key, entry in self.m_EntryDict.iteritems():
@@ -676,8 +675,8 @@ def PrintList(my_list, outfile):
 ############ USER SETTINGS ##################
 total_word_count_in_parse =0
 g_encoding =  "asci"  
-prev_iteration_number =  0   # Index of last saved iteration ('0' for fresh start)
-stop_iteration_number = 10   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
+prev_iteration_number = 650   # Index of last saved iteration ('0' for fresh start)
+stop_iteration_number = 700   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
