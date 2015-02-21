@@ -46,8 +46,7 @@ class LexiconEntry:
 		if len(self.m_Subwords) > 0:
 			expression = "/".join( self.m_Subwords )
 			print >>outfile, "%s" % expression
-                        # NOTE: component subwords are displayed here even if filtered from lexicon; 
-			# however repr counts are adjusted (see FilterZeroCountEntries())
+                        # NOTE: see FilterZeroCountEntries() for subword list maintenance
   			
 		for iteration_number, parse_count, repr_count, newextwords in self.m_CountRegister:
 		        if newextwords == []:
@@ -120,12 +119,12 @@ class Lexicon:
 		if len(key) > self.m_SizeOfLongestEntry:
 			self.m_SizeOfLongestEntry = len(key)
 	# ---------------------------------------------------------#	
-	def FilterZeroCountEntries(self, iteration_number):
+	def FilterZeroCountEntries(self):
 		for key, key_entry in self.m_EntryDict.items():
 			if len(key)>1 and key_entry.m_ParseCount == 0 and key_entry.m_ReprCount < 2:   # THIS IS A SIMPLE VERSION; ALSO, DO WE REALLY WANT TO DISALLOW ITS USE FOR THE FUTURE?
 				# First, maintain consistency of lexicon
 				for e in key_entry.m_Extwords:    # there's at most one
-					self.m_EntryDict[e].m_Subwords.remove(key)   #on third thought, remember hap, perhap, perhaps # on second thought, retain the original component
+					self.m_EntryDict[e].m_Subwords.remove(key)   # remember hap, perhap, perhaps 
 				for s in key_entry.m_Subwords:
 					s_entry = self.m_EntryDict[s]
 					s_entry.m_Extwords.remove(key)
@@ -140,14 +139,13 @@ class Lexicon:
 						s_entry.m_ReprCount += 1
 				
 				# Then transfer this entry from the EntryDict to the DeletionDict
-				key_entry.UpdateRegister(iteration_number)      # so that this last stage is visible
 				self.m_DeletionDict[key] = key_entry				
 				del self.m_EntryDict[key]
 				
-				print "Deleted ", key
-				print >>outfile, "Deleted ", key
+				print "---> Deleted ", key
+				print >>outfile, "---> Deleted ", key
 	# ---------------------------------------------------------#
-	def TrackChanges(self, iteration_number):
+	def UpdateLexEntryRegisters(self, iteration_number):
 	        for key, entry in self.m_EntryDict.iteritems():
 	               entry.UpdateRegister(iteration_number)
 
@@ -289,7 +287,7 @@ class Lexicon:
 #			entry.m_Frequency = (entry.m_ParseCount + entry.m_ReprCount)/float(FreqDenom)
 #			 
 # ---------------------------------------------------------#
-	def ParseCorpus(self, outfile, current_iteration):
+	def ParseCorpus(self, current_iteration, outfile):
 		self.m_ParsedCorpus = list()
 		self.m_CorpusCost = 0.0
 
@@ -302,19 +300,20 @@ class Lexicon:
 			for word in parsed_line:
 				self.m_EntryDict[word].m_ParseCount +=1
 
-		print "Cost: "
-		print "-%16s" % 'Corpus: ',    "{0:18,.4f}".format(self.m_CorpusCost)
-		print "-%16s" % 'Lexicon: ',   "{0:18,.4f}".format(self.m_LexiconCost)
-		print "-%16s" % 'Combined: ',  "{0:18,.4f}".format(self.m_CorpusCost + self.m_LexiconCost)
+		# MOVED to Report()  2015_02_18  audrey
+		#print "Cost: "
+		#print "-%16s" % 'Corpus: ',    "{0:18,.4f}".format(self.m_CorpusCost)
+		#print "-%16s" % 'Lexicon: ',   "{0:18,.4f}".format(self.m_LexiconCost)
+		#print "-%16s" % 'Combined: ',  "{0:18,.4f}".format(self.m_CorpusCost + self.m_LexiconCost)
 		
-		print >>outfile, "Cost: "
-		print >>outfile, "-%16s" % 'Corpus: ',    "{0:18,.4f}".format(self.m_CorpusCost)
-		print >>outfile, "-%16s" % 'Lexicon: ',   "{0:18,.4f}".format(self.m_LexiconCost)
-		print >>outfile, "-%16s" % 'Combined: ',  "{0:18,.4f}".format(self.m_CorpusCost + self.m_LexiconCost)
+		#print >>outfile, "Cost: "
+		#print >>outfile, "-%16s" % 'Corpus: ',    "{0:18,.4f}".format(self.m_CorpusCost)
+		#print >>outfile, "-%16s" % 'Lexicon: ',   "{0:18,.4f}".format(self.m_LexiconCost)
+		#print >>outfile, "-%16s" % 'Combined: ',  "{0:18,.4f}".format(self.m_CorpusCost + self.m_LexiconCost)
 
-		# in preparation for next iteration
-		self.FilterZeroCountEntries(current_iteration)  #NOTE - Does not affect self.m_NumberOfHypothesizedRunningWords
-		self.ComputeDictFrequencies()  # Not necessary -- we need counts but will use frequency AFTER adding nominees
+		# in preparation for next iteration  
+		#self.FilterZeroCountEntries(current_iteration)  #MOVED TO ExtendLexicon() 2015_02_18  #NOTE - Does not affect self.m_NumberOfHypothesizedRunningWords
+		#self.ComputeDictFrequencies()  # Not necessary -- we need counts but will use frequency AFTER adding nominees
 
 		return  
 # ---------------------------------------------------------#		 	 
@@ -376,9 +375,8 @@ class Lexicon:
 		bitcost = BestCompressedLength[outerscan]
 		return (Parse[wordlength],bitcost)
 # ---------------------------------------------------------#
-	def GenerateCandidates(self, howmany, outfile, current_iteration):
-	        # NewExtwords for this iteration are set in this function; 
-	        # previous entries may be cleared as here (at top of loop) or within TrackChanges() (at bottom of loop)
+	def GenerateCandidates(self, current_iteration, howmany, outfile):
+	        # NewExtwords (for display from the CountRegister at this iteration only) are set in this function 
 	        for word, lexicon_entry in self.m_EntryDict.iteritems():
 	    	        lexicon_entry.m_NewExtwords = [] 
 	    	
@@ -414,14 +412,14 @@ class Lexicon:
 				break
 				
 		print "Nominees:"
-		#DeltaPreParseCounts = 0
-		#DeltaPreReprCounts  = 0
 		latex_data= list()
 		latex_data.append("piece   count   subword    subword   status")
 		for nominee, entry in NomineeList:
 		        # for the new word
-			entry.m_CountRegister.append((current_iteration, entry.m_ParseCount, entry.m_ReprCount, []))  # as in UpdateRegister() - only this is pre-parse!
-			self.AddEntry(nominee,entry) 
+			entry.m_CountRegister.append((current_iteration, entry.m_ParseCount, 0, []))  # as in UpdateRegister()
+			self.AddEntry(nominee,entry)                                                  # This records the initial count--before parsing.
+			                                                                              # If the actual count used in the parse differs,
+			                                                                              # both records will appear for this iteration in the CountRegister.
 			
 			# for the trace
 			for word in entry.m_Subwords:
@@ -434,19 +432,15 @@ class Lexicon:
 		        for x in entry.m_Subwords:
 		        	expr = expr + "%12s" % (x)
 			print "%15s  %10s %-50s" % (nominee, '{:,}'.format(entry.m_ParseCount), expr)
-			#print "[", nominee, '{:,}'.format(entry.m_Count), entry.m_Subword0, entry.m_Subword1,"]"
 			latex_data.append(nominee +  "\t" + '{:,} {}'.format(entry.m_ParseCount, expr) )
 			
-		        #DeltaPreParseCounts += entry.m_ParseCount   # NOT NEEDED -- the nominees are in the dictionary
-		        #DeltaPreReprCounts  += 2                    # and these repr counts are also in the dictionary
-
 		MakeLatexTable(latex_data,outfile)
-		self.ComputeDictFrequencies()
+		#self.ComputeDictFrequencies()   # MOVED OUTSIDE  2015_02_18  audrey
 		# Note: This pretends that appearances of the nominees are additional, not replacement, occurrences in a parse.
 		
-		self.m_LexiconCost = self.m_InitialLexCost	
-		for key, entry in self.m_EntryDict.iteritems():
-			self.m_LexiconCost += entry.m_ReprCount *  -1 * math.log(entry.m_Frequency, 2)
+		#self.m_LexiconCost = self.m_InitialLexCost    # MOVED OUTSIDE  2015_02_18  audrey	
+		#for key, entry in self.m_EntryDict.iteritems():
+			#self.m_LexiconCost += entry.m_ReprCount *  -1 * math.log(entry.m_Frequency, 2) 
 
 		
 		return NomineeList      # NOTE THAT THE RETURN VALUE IS NOT USED
@@ -527,7 +521,7 @@ class Lexicon:
 			self.m_DeletionDict[key].Display(outfile)
 
 # ---------------------------------------------------------#
-	def PrecisionRecall(self, iteration_number, outfile,total_word_count_in_parse):   # total_word_count_in_parse not used
+	def PrecisionRecall(self, iteration_number, outfile):   # total_word_count_in_parse not used
 		 
 		total_true_positive_for_break = 0
 		total_number_of_hypothesized_words = 0
@@ -658,6 +652,51 @@ class Lexicon:
 			
 
 # ---------------------------------------------------------#
+	def ExtendLexicon(self, iteration_number, howmany, outfile):
+		self.FilterZeroCountEntries()
+		self.GenerateCandidates(iteration_number, howmany, outfile)
+		
+		self.ComputeDictFrequencies()   # uses ParseCount info from previous parse and GenerateCandidates()
+		                                # uses ReprCount info from Filter...() and Generate...()
+		                                
+		self.m_LexiconCost = self.m_InitialLexCost	
+		for key, entry in self.m_EntryDict.iteritems():
+			self.m_LexiconCost += entry.m_ReprCount *  -1 * math.log(entry.m_Frequency, 2)         
+
+
+# ---------------------------------------------------------#
+	def Report(self, iteration_number, outfile):
+		# LexiconCost is calculated in ExtendLexicon(), CorpusCost in ParseCorpus().
+		print "Cost: "
+		print "-%16s" % 'Corpus: ',    "{0:18,.4f}".format(self.m_CorpusCost)
+		print "-%16s" % 'Lexicon: ',   "{0:18,.4f}".format(self.m_LexiconCost)
+		print "-%16s" % 'Combined: ',  "{0:18,.4f}".format(self.m_CorpusCost + self.m_LexiconCost)
+		
+		print >>outfile, "Cost: "
+		print >>outfile, "-%16s" % 'Corpus: ',    "{0:18,.4f}".format(self.m_CorpusCost)
+		print >>outfile, "-%16s" % 'Lexicon: ',   "{0:18,.4f}".format(self.m_LexiconCost)
+		print >>outfile, "-%16s" % 'Combined: ',  "{0:18,.4f}".format(self.m_CorpusCost + self.m_LexiconCost)
+		
+		self.PrecisionRecall(iteration_number, outfile)
+		self.UpdateLexEntryRegisters(iteration_number)
+
+
+# ---------------------------------------------------------#
+#	def Stabilize(self, iteration_number, outfile):  # Parse a second time with no further additions to lexicon
+#		self.FilterZeroCountEntries()
+#
+#		self.ComputeDictFrequencies()   # uses ParseCount info from previous parse and GenerateCandidates()
+#		                                # uses ReprCount info from Filter...() and Generate...()		                                
+#
+#		self.m_LexiconCost = self.m_InitialLexCost			
+#		for key, entry in self.m_EntryDict.iteritems():
+#			self.m_LexiconCost += entry.m_ReprCount *  -1 * math.log(entry.m_Frequency, 2)  
+#			
+#		self.ParseCorpus(current_iteration, outfile)
+#		self.Report(current_iteration, outfile)
+#
+#
+# ---------------------------------------------------------#
 def PrintList(my_list, outfile):
 	print >>outfile
 	for item in my_list:
@@ -667,8 +706,8 @@ def PrintList(my_list, outfile):
 ############ USER SETTINGS ##################
 total_word_count_in_parse =0
 g_encoding =  "asci"  
-prev_iteration_number =  10   # Index of last saved iteration ('0' for fresh start)
-stop_iteration_number =  12   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
+prev_iteration_number =   0   # Index of last saved iteration ('0' for fresh start)
+stop_iteration_number = 100   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
@@ -681,30 +720,28 @@ this_lexicon = Lexicon()
 
 if prev_iteration_number == 0:
 	this_lexicon.ReadBrokenCorpus (corpusfilename, numberoflines)   # audrey 2014_07_04. Note that numberoflines == 0, so all lines get read.
-	#this_lexicon.ParseCorpus (outfile, current_iteration)
 else:
 	print "LOADING SAVED STATE..."
 	this_lexicon.LoadState(prev_iteration_number)
 
-
 t_start = time.time()          # 2014_07_20
-print "\nt_start = ", t_start
-
 for current_iteration in range(1+prev_iteration_number, 1+stop_iteration_number):
 	print "\nIteration number", current_iteration
 	print >>outfile, "\nIteration number", current_iteration
-	this_lexicon.GenerateCandidates(howmanycandidatesperiteration, outfile, current_iteration)
-	this_lexicon.ParseCorpus (outfile, current_iteration)
-	this_lexicon.PrecisionRecall(current_iteration, outfile,total_word_count_in_parse)
-	this_lexicon.TrackChanges(current_iteration)
 	
-this_lexicon.PrintParsedCorpus(outfile)     # COMMENTED OUT  apf 2014_05_29
-this_lexicon.PrintLexicon(outfile)
+	this_lexicon.ExtendLexicon(current_iteration, howmanycandidatesperiteration, outfile)
+	this_lexicon.ParseCorpus (current_iteration, outfile)
+	this_lexicon.Report(current_iteration, outfile)
+	
+	# this_lexicon.Stabilize(current_iteration, outfile)	
 this_lexicon.PrintPrecisionRecall(outfile)
+this_lexicon.PrintLexicon(outfile)
+this_lexicon.PrintParsedCorpus(outfile)
 
 t_end = time.time()
-print "\nt_end = ", t_end
-print >>outfile, "\nElapsed wall time in seconds = ", t_end - t_start
+elapsed = t_end - t_start
+print "\n\nElapsed wall time in seconds = ", elapsed
+print >>outfile, "\n\nElapsed wall time in seconds = ", elapsed
 
 # EXAMPLE apf 2014_05_20 #
 print >>outfile, "\n\n--------------------\n\n"
