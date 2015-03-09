@@ -27,6 +27,8 @@ class LexiconEntry:
 		self.m_Extwords = list() 
 		self.m_NewExtwords = list()
 		self.m_CountRegister = list()
+		self.m_Suffix = False               	#PUT THIS IN WHEN RUN FROM BEGINNING!
+		self.m_Stem = False               	#PUT THIS IN WHEN RUN FROM BEGINNING!
 		
 		
 	def UpdateRegister(self, current_iteration):
@@ -147,8 +149,88 @@ class Lexicon:
 	# ---------------------------------------------------------#
 	def UpdateLexEntryRegisters(self, iteration_number):
 	        for key, entry in self.m_EntryDict.iteritems():
-	               entry.UpdateRegister(iteration_number)
+	        	entry.UpdateRegister(iteration_number)
 
+	# ---------------------------------------------------------#
+	def AddSuffixMark(self, keyList):
+		for key in keyList:
+	        	if key in self.m_EntryDict:
+	        		self.m_EntryDict[key].m_Suffix = True
+	               		
+	# ---------------------------------------------------------#
+	def RemoveSuffixMark(self, keyList):
+		for key in keyList:
+	        	if key in self.m_EntryDict:
+	                	self.m_EntryDict[key].m_Suffix = False
+
+	# ---------------------------------------------------------#
+	def ExtractListFromLing413File(self, infilename, outfilename, column):
+		infile  = codecs.open(infilename, encoding='utf-16')
+		outfile = codecs.open(outfilename, "w", encoding='ascii')
+		morphemeList = list()
+
+		filelines = infile.readlines()
+		for line in filelines:
+			pieces = line.split()
+			#print pieces
+			if len(pieces) <= 1 or pieces[0] == '#':
+				continue
+			morpheme = pieces[column]
+			morphemeList.append(morpheme)
+			if morpheme in self.m_EntryDict:
+				print >> outfile, "0  ", morpheme
+			else:
+				print >> outfile, "1  ", morpheme
+			
+		outfile.close()
+		infile.close()
+	
+		# ALSO CONSTRUCT AND RETURN LIST WHEN NEEDED
+		return morphemeList
+		
+	# ---------------------------------------------------------#
+	def ApplySuffixIdent(self, suffixList):    	# WON't NEED PARAMETER WHEN RUN FROM BEGINNING!!!    Similar to GenerateCandidates()
+		SuffixIdentDict = dict()				# similar to CandidateDict
+		for parsed_line in self.m_ParsedCorpus:	 
+			for wordno in range(len(parsed_line)-1):
+			        word0 = parsed_line[wordno]
+			        word1 = parsed_line[wordno + 1]
+			        # if self.m_EntryDict[word1].m_Suffix == True:     # PUT THIS IN WHEN RUN FROM BEGINNING
+			        if suffixList.count(word1) > 0:
+					candidate = word0 + word1				 		 
+					if candidate in self.m_EntryDict:					 
+						continue
+					if candidate in SuffixIdentDict:
+						SuffixIdentDict[candidate].m_ParseCount += 1
+					else:
+						this_entry = LexiconEntry(candidate)
+						this_entry.m_ParseCount = 1
+						this_entry.m_Subwords = [word0, word1]
+						SuffixIdentDict[candidate] = this_entry
+						
+		latex_data= list()
+		latex_data.append("piece   count   subword    subword   status")
+		for candidate, entry in SuffixIdentDict.iteritems():
+			entry.m_CountRegister.append((current_iteration, entry.m_ParseCount, 0, []))  # as in UpdateRegister()
+
+			# for the trace
+			for word in entry.m_Subwords:
+				self.m_EntryDict[word].m_ReprCount += 1
+	                	self.m_EntryDict[word].m_Extwords.append(candidate)
+	                	self.m_EntryDict[word].m_NewExtwords.append(candidate)  #will go into m_CountRegister to display along with changed counts 
+			                                                                                   
+			# for display			
+		        expr = ""
+		        for x in entry.m_Subwords:
+		        	expr = expr + "%12s" % (x)
+			print "%15s  %10s %-50s" % (candidate, '{:,}'.format(entry.m_ParseCount), expr)
+			latex_data.append(candidate +  "\t" + '{:,} {}'.format(entry.m_ParseCount, expr) )
+
+			entry.m_ParseCount = 50      # NOTE NOTE NOTE NOTE
+			self.AddEntry(candidate, entry)
+
+		MakeLatexTable(latex_data,outfile)
+	
 	# ---------------------------------------------------------#
 	#def ReadCorpus(self, infilename):  #2014_07_22  Not in use. 
 	#	print "\nName of data file: ", infilename
@@ -229,6 +311,8 @@ class Lexicon:
 			if numberoflines > 0 and len(self.m_Corpus) > numberoflines:
 				break		 
 			self.m_BreakPointList.append(breakpoint_list)
+			
+		print "m_NumberOfTrueRunningWords = ", self.m_NumberOfTrueRunningWords, "\n"
 
 		# HERE IS INITIAL LEXICON INFORMATION
 		# At this point the only entries in the lexicon are single characters.
@@ -655,7 +739,6 @@ class Lexicon:
 	def ExtendLexicon(self, iteration_number, howmany, outfile):
 		self.FilterZeroCountEntries()
 		self.GenerateCandidates(iteration_number, howmany, outfile)
-		
 		self.ComputeDictFrequencies()   # uses ParseCount info from previous parse and GenerateCandidates()
 		                                # uses ReprCount info from Filter...() and Generate...()
 		                                
@@ -703,6 +786,7 @@ def PrintList(my_list, outfile):
 		print >>outfile, item,  
 
 
+
 ############ USER SETTINGS ##################
 total_word_count_in_parse =0
 g_encoding =  "asci"  
@@ -723,13 +807,32 @@ if prev_iteration_number == 0:
 else:
 	print "LOADING SAVED STATE..."
 	this_lexicon.LoadState(prev_iteration_number)
+	
+############## March 5, 2015     
+#this_lexicon.ExtractListFromLing413File("C200_ling413.2015_03_04._1_Mini1_Stems.txt", "C200_ling413.Stems_extracted.txt", 1)
+#suffixList = this_lexicon.ExtractListFromLing413File("C200_ling413.2015_03_04._1_Mini1_Suffixes.txt", "C200_ling413.Suffixes_extracted.txt", 0) 
+#this_lexicon.AddSuffixMark(suffixList)   # ADD BACK IN WHEN RUN FROM #
+#print "Suffix List from C200_ling413.2015_03_04._1_Mini1_Suffixes.txt"
+#for suffix in suffixList:
+	#print suffix
+################## March 5, 2015
+
 
 t_start = time.time()          # 2014_07_20
 for current_iteration in range(1+prev_iteration_number, 1+stop_iteration_number):
 	print "\nIteration number", current_iteration
 	print >>outfile, "\nIteration number", current_iteration
+
+	#this_lexicon.ApplySuffixIdent(suffixList)
+	#this_lexicon.ComputeDictFrequencies()   # uses ParseCount info from previous parse and GenerateCandidates()
+		                                # uses ReprCount info from Filter...() and Generate...()
+		                                
+	#this_lexicon.m_LexiconCost = this_lexicon.m_InitialLexCost	
+	#for key, entry in this_lexicon.m_EntryDict.iteritems():
+		#this_lexicon.m_LexiconCost += entry.m_ReprCount *  -1 * math.log(entry.m_Frequency, 2)         
+
 	
-	this_lexicon.ExtendLexicon(current_iteration, howmanycandidatesperiteration, outfile)
+	this_lexicon.ExtendLexicon(current_iteration, howmanycandidatesperiteration, outfile)	
 	this_lexicon.ParseCorpus (current_iteration, outfile)
 	this_lexicon.Report(current_iteration, outfile)
 	
