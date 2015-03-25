@@ -82,14 +82,17 @@ class Lexicon:
 		#obj = pickle.load(fp)
 		#fp.close()
 
-	def SaveState(self):
-		self.save_obj(self.m_EntryDict, 'Pkl_EntryDict.p')
-		self.save_obj(self.m_SizeOfLongestEntry, 'Pkl_SizeOfLongestEntry.p')
-		self.save_obj(self.m_DeletionDict, 'Pkl_DeletionDict.p')
-		self.save_obj(self.m_Corpus, 'Pkl_Corpus.p')
-		self.save_obj(self.m_ParsedCorpus, 'Pkl_ParsedCorpus.p')
-		self.save_obj(self.m_BreakPointList, 'Pkl_BreakPointList.p')
-		self.save_obj(self.m_PrecisionRecallHistory, 'Pkl_PrecisionRecallHistory.p')
+	def SaveState(self, pickle_folder):
+		os.mkdir(pickle_folder)
+		pickle_path = pickle_folder + "/"
+
+		self.save_obj(self.m_EntryDict, pickle_path + 'Pkl_EntryDict.p')
+		self.save_obj(self.m_SizeOfLongestEntry, pickle_path + 'Pkl_SizeOfLongestEntry.p')
+		self.save_obj(self.m_DeletionDict, pickle_path + 'Pkl_DeletionDict.p')
+		self.save_obj(self.m_Corpus, pickle_path + 'Pkl_Corpus.p')
+		self.save_obj(self.m_ParsedCorpus, pickle_path + 'Pkl_ParsedCorpus.p')
+		self.save_obj(self.m_BreakPointList, pickle_path + 'Pkl_BreakPointList.p')
+		self.save_obj(self.m_PrecisionRecallHistory, pickle_path + 'Pkl_PrecisionRecallHistory.p')
 		
 	def LoadState(self, intended_prev_iteration):
 		fp = open('Pkl_PrecisionRecallHistory.p', 'rb')
@@ -117,7 +120,7 @@ class Lexicon:
 	# ---------------------------------------------------------#
 	def AddEntry(self,key,new_entry):    #was AddEntry(self,key,count)
 		#this_entry = LexiconEntry(key,count)
-		self.m_EntryDict[key] = new_entry
+		self.m_EntryDict[key] = copy.deepcopy(new_entry)
 		if len(key) > self.m_SizeOfLongestEntry:
 			self.m_SizeOfLongestEntry = len(key)
 	# ---------------------------------------------------------#	
@@ -196,7 +199,8 @@ class Lexicon:
 			        word0 = parsed_line[wordno]
 			        word1 = parsed_line[wordno + 1]
 			        # if self.m_EntryDict[word1].m_Suffix == True:     # PUT THIS IN WHEN RUN FROM BEGINNING
-			        if suffixList.count(word1) > 0:
+			        #if suffixList.count(word1) > 0:    # Use this line when running LinkPrevious
+			        if suffixList.count(word0) > 0:    # Use this line when running LinkFollowing
 					candidate = word0 + word1				 		 
 					if candidate in self.m_EntryDict:					 
 						continue
@@ -226,10 +230,11 @@ class Lexicon:
 			print "%15s  %10s %-50s" % (candidate, '{:,}'.format(entry.m_ParseCount), expr)
 			latex_data.append(candidate +  "\t" + '{:,} {}'.format(entry.m_ParseCount, expr) )
 
-			entry.m_ParseCount = 50      # NOTE NOTE NOTE NOTE
 			self.AddEntry(candidate, entry)
+			# self.m_EntryDict[candidate].m_ParseCount = 50      # NOTE NOTE NOTE NOTE
 
 		MakeLatexTable(latex_data,outfile)
+		return SuffixIdentDict
 	
 	# ---------------------------------------------------------#
 	#def ReadCorpus(self, infilename):  #2014_07_22  Not in use. 
@@ -790,8 +795,8 @@ def PrintList(my_list, outfile):
 ############ USER SETTINGS ##################
 total_word_count_in_parse =0
 g_encoding =  "asci"  
-prev_iteration_number =   0   # Index of last saved iteration ('0' for fresh start)
-stop_iteration_number = 100   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
+prev_iteration_number = 150   # Index of last saved iteration ('0' for fresh start)
+stop_iteration_number = 151   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
@@ -809,12 +814,15 @@ else:
 	this_lexicon.LoadState(prev_iteration_number)
 	
 ############## March 5, 2015     
-#this_lexicon.ExtractListFromLing413File("C200_ling413.2015_03_04._1_Mini1_Stems.txt", "C200_ling413.Stems_extracted.txt", 1)
-#suffixList = this_lexicon.ExtractListFromLing413File("C200_ling413.2015_03_04._1_Mini1_Suffixes.txt", "C200_ling413.Suffixes_extracted.txt", 0) 
-#this_lexicon.AddSuffixMark(suffixList)   # ADD BACK IN WHEN RUN FROM #
-#print "Suffix List from C200_ling413.2015_03_04._1_Mini1_Suffixes.txt"
-#for suffix in suffixList:
-	#print suffix
+if True:   #take in the suffixes from Linguistica
+	suffix_infile_name  = "Corpus" + str(prev_iteration_number) + "_1_Mini1_Suffixes.txt"
+	suffix_outfile_name = "Corpus" + str(prev_iteration_number) + ".Suffixes_extracted.txt"
+	#stemList   = this_lexicon.ExtractListFromLing413File("C200_ling413.2015_03_04._1_Mini1_Stems.txt", "C200_ling413.Stems_extracted.txt", 1)
+	suffixList = this_lexicon.ExtractListFromLing413File(suffix_infile_name, suffix_outfile_name, 0) 
+	#this_lexicon.AddSuffixMark(suffixList)   # ADD BACK IN WHEN RUN FROM #
+	print "Suffix List from", suffix_infile_name
+	for suffix in suffixList:
+		print suffix
 ################## March 5, 2015
 
 
@@ -823,18 +831,32 @@ for current_iteration in range(1+prev_iteration_number, 1+stop_iteration_number)
 	print "\nIteration number", current_iteration
 	print >>outfile, "\nIteration number", current_iteration
 
-	#this_lexicon.ApplySuffixIdent(suffixList)
-	#this_lexicon.ComputeDictFrequencies()   # uses ParseCount info from previous parse and GenerateCandidates()
-		                                # uses ReprCount info from Filter...() and Generate...()
-		                                
-	#this_lexicon.m_LexiconCost = this_lexicon.m_InitialLexCost	
-	#for key, entry in this_lexicon.m_EntryDict.iteritems():
-		#this_lexicon.m_LexiconCost += entry.m_ReprCount *  -1 * math.log(entry.m_Frequency, 2)         
+	if True:  # alternative to ExtendLexicon()
+		SuffixIdentDict = this_lexicon.ApplySuffixIdent(suffixList)
+		this_lexicon.ComputeDictFrequencies()   # uses ParseCount info from previous parse and GenerateCandidates()
+		                                	# uses ReprCount info from Filter...() and Generate...()                                
+		this_lexicon.m_LexiconCost = this_lexicon.m_InitialLexCost	
+		for key, entry in this_lexicon.m_EntryDict.iteritems():
+			this_lexicon.m_LexiconCost += entry.m_ReprCount *  -1 * math.log(entry.m_Frequency, 2)         
 
 	
-	this_lexicon.ExtendLexicon(current_iteration, howmanycandidatesperiteration, outfile)	
+	#this_lexicon.ExtendLexicon(current_iteration, howmanycandidatesperiteration, outfile)	
 	this_lexicon.ParseCorpus (current_iteration, outfile)
 	this_lexicon.Report(current_iteration, outfile)
+	
+	
+	if True:    # SHOW BEFORE AND AFTER COUNTS FOR SUFFIXES
+		countsoutfilename = "Suffixiter" + str(stop_iteration_number)+"_LinkFollowing.Counts.11a.2015_03_20.931pm.txt" 
+		counts_outfile = open(countsoutfilename, "w")
+		for key, entry in SuffixIdentDict.iteritems():   # this holds the BeforeParse count
+			# for display
+			expr = ""
+			for x in entry.m_Subwords:
+		        	expr = expr + "%12s" % (x)
+		        AfterParseCount = this_lexicon.m_EntryDict[key].m_ParseCount
+			#print "%15s  %10s  %10s %-50s" % (key, '{:,}'.format(entry.m_ParseCount), '{:,}'.format(AfterParseCount), expr)
+			print >> counts_outfile, "%22s  %10s  %10s %-50s" % (key, '{:,}'.format(entry.m_ParseCount), '{:,}'.format(AfterParseCount), expr)
+
 	
 	# this_lexicon.Stabilize(current_iteration, outfile)	
 this_lexicon.PrintPrecisionRecall(outfile)
@@ -846,26 +868,28 @@ elapsed = t_end - t_start
 print "\n\nElapsed wall time in seconds = ", elapsed
 print >>outfile, "\n\nElapsed wall time in seconds = ", elapsed
 
-# EXAMPLE apf 2014_05_20 #
-print >>outfile, "\n\n--------------------\n\n"
-print >>outfile, "EXAMPLE: Parse 'therentisdue'"
-verboseflag = True
-this_lexicon.ParseWord("therentisdue", outfile)
-# ------------------ #
-print >>outfile, "\n\n--------------------\n\n"
-print >>outfile, "EXAMPLE: Parse 'duringthepast'"
-this_lexicon.ParseWord("duringthepast", outfile)
+if False:
+	# EXAMPLE apf 2014_05_20 #
+	print >>outfile, "\n\n--------------------\n\n"
+	print >>outfile, "EXAMPLE: Parse 'therentisdue'"
+	verboseflag = True
+	this_lexicon.ParseWord("therentisdue", outfile)
+	# ------------------ #
+	print >>outfile, "\n\n--------------------\n\n"
+	print >>outfile, "EXAMPLE: Parse 'duringthepast'"
+	this_lexicon.ParseWord("duringthepast", outfile)
 
-print >>outfile, "\n\n--------------------\n\n"
-print >>outfile, "EXAMPLE: Parse 'duringthe'"
-this_lexicon.ParseWord("duringthe", outfile)
+	print >>outfile, "\n\n--------------------\n\n"
+	print >>outfile, "EXAMPLE: Parse 'duringthe'"
+	this_lexicon.ParseWord("duringthe", outfile)
 
 
 print
 outfile.close()
 
 print "SAVING...Move to a separate labelled directory if desired to prevent subsequent overwriting"
-this_lexicon.SaveState()
+pickle_folder = "PklFolder." + countsoutfilename
+this_lexicon.SaveState(pickle_folder)
 
 
 
