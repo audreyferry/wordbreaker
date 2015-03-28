@@ -123,6 +123,7 @@ class Lexicon:
 		self.m_EntryDict[key] = copy.deepcopy(new_entry)
 		if len(key) > self.m_SizeOfLongestEntry:
 			self.m_SizeOfLongestEntry = len(key)
+		return self.m_EntryDict[key]
 	# ---------------------------------------------------------#	
 	def FilterZeroCountEntries(self):
 		for key, key_entry in self.m_EntryDict.items():
@@ -191,50 +192,6 @@ class Lexicon:
 		# ALSO CONSTRUCT AND RETURN LIST WHEN NEEDED
 		return morphemeList
 		
-	# ---------------------------------------------------------#
-	def ApplySuffixIdent(self, suffixList):    	# WON't NEED PARAMETER WHEN RUN FROM BEGINNING!!!    Similar to GenerateCandidates()
-		SuffixIdentDict = dict()				# similar to CandidateDict
-		for parsed_line in self.m_ParsedCorpus:	 
-			for wordno in range(len(parsed_line)-1):
-			        word0 = parsed_line[wordno]
-			        word1 = parsed_line[wordno + 1]
-			        # if self.m_EntryDict[word1].m_Suffix == True:     # PUT THIS IN WHEN RUN FROM BEGINNING
-			        #if suffixList.count(word1) > 0:    # Use this line when running LinkPrevious
-			        if suffixList.count(word0) > 0:    # Use this line when running LinkFollowing
-					candidate = word0 + word1				 		 
-					if candidate in self.m_EntryDict:					 
-						continue
-					if candidate in SuffixIdentDict:
-						SuffixIdentDict[candidate].m_ParseCount += 1
-					else:
-						this_entry = LexiconEntry(candidate)
-						this_entry.m_ParseCount = 1
-						this_entry.m_Subwords = [word0, word1]
-						SuffixIdentDict[candidate] = this_entry
-						
-		latex_data= list()
-		latex_data.append("piece   count   subword    subword   status")
-		for candidate, entry in SuffixIdentDict.iteritems():
-			entry.m_CountRegister.append((current_iteration, entry.m_ParseCount, 0, []))  # as in UpdateRegister()
-
-			# for the trace
-			for word in entry.m_Subwords:
-				self.m_EntryDict[word].m_ReprCount += 1
-	                	self.m_EntryDict[word].m_Extwords.append(candidate)
-	                	self.m_EntryDict[word].m_NewExtwords.append(candidate)  #will go into m_CountRegister to display along with changed counts 
-			                                                                                   
-			# for display			
-		        expr = ""
-		        for x in entry.m_Subwords:
-		        	expr = expr + "%12s" % (x)
-			print "%15s  %10s %-50s" % (candidate, '{:,}'.format(entry.m_ParseCount), expr)
-			latex_data.append(candidate +  "\t" + '{:,} {}'.format(entry.m_ParseCount, expr) )
-
-			self.AddEntry(candidate, entry)
-			# self.m_EntryDict[candidate].m_ParseCount = 50      # NOTE NOTE NOTE NOTE
-
-		MakeLatexTable(latex_data,outfile)
-		return SuffixIdentDict
 	
 	# ---------------------------------------------------------#
 	#def ReadCorpus(self, infilename):  #2014_07_22  Not in use. 
@@ -371,11 +328,6 @@ class Lexicon:
 			entry.m_Frequency = (entry.m_ParseCount + entry.m_ReprCount)/float(TotalCount)
 			 
 # ---------------------------------------------------------#
-#	def ComputeDictFrequencies(self, FreqDenom):
-#		for (key, entry) in self.m_EntryDict.iteritems():
-#			entry.m_Frequency = (entry.m_ParseCount + entry.m_ReprCount)/float(FreqDenom)
-#			 
-# ---------------------------------------------------------#
 	def ParseCorpus(self, current_iteration, outfile):
 		self.m_ParsedCorpus = list()
 		self.m_CorpusCost = 0.0
@@ -464,7 +416,7 @@ class Lexicon:
 		bitcost = BestCompressedLength[outerscan]
 		return (Parse[wordlength],bitcost)
 # ---------------------------------------------------------#
-	def GenerateCandidates(self, current_iteration, howmany, outfile):
+	def GenerateCandidates_standardmethod(self, current_iteration, howmany, outfile):
 	        # NewExtwords (for display from the CountRegister at this iteration only) are set in this function 
 	        for word, lexicon_entry in self.m_EntryDict.iteritems():
 	    	        lexicon_entry.m_NewExtwords = [] 
@@ -524,16 +476,117 @@ class Lexicon:
 			latex_data.append(nominee +  "\t" + '{:,} {}'.format(entry.m_ParseCount, expr) )
 			
 		MakeLatexTable(latex_data,outfile)
-		#self.ComputeDictFrequencies()   # MOVED OUTSIDE  2015_02_18  audrey
-		# Note: This pretends that appearances of the nominees are additional, not replacement, occurrences in a parse.
-		
-		#self.m_LexiconCost = self.m_InitialLexCost    # MOVED OUTSIDE  2015_02_18  audrey	
-		#for key, entry in self.m_EntryDict.iteritems():
-			#self.m_LexiconCost += entry.m_ReprCount *  -1 * math.log(entry.m_Frequency, 2) 
-
 		
 		return NomineeList      # NOTE THAT THE RETURN VALUE IS NOT USED
 
+	# ---------------------------------------------------------#
+	def GenerateCandidates_suffixmethod(self):    	# Similar to GenerateCandidates() [renamed as GenerateCandidates_standardmethod]
+
+		# Take in the suffixes from Linguistica
+		suffix_infile_name  = "Corpus" + str(prev_iteration_number) + "_1_Mini1_Suffixes.txt"
+		suffix_outfile_name = "Corpus" + str(prev_iteration_number) + ".Suffixes_extracted.txt"
+		suffixList = this_lexicon.ExtractListFromLing413File(suffix_infile_name, suffix_outfile_name, 0) 
+		#this_lexicon.AddSuffixMark(suffixList)   # PUT THIS IN WHEN VERSION HAS m_Suffix
+		print "Suffix List from", suffix_infile_name
+		for suffix in suffixList:
+			print suffix
+
+
+		# Create a dictionary of potential words
+		SuffixedCandidateDict = dict()				# similar to CandidateDict
+		for parsed_line in self.m_ParsedCorpus:	 
+			for wordno in range(len(parsed_line)-1):
+			        word0 = parsed_line[wordno]
+			        word1 = parsed_line[wordno + 1]
+			        # if self.m_EntryDict[word1].m_Suffix == True:     # PUT THIS IN WHEN VERSION HAS m_Suffix
+			        if suffixList.count(word1) > 0:    # Use this line when running LinkPrevious
+			        #if suffixList.count(word0) > 0:    # Use this line when running LinkFollowing
+					suffixed_candidate = word0 + word1				 		 
+					if suffixed_candidate in self.m_EntryDict:					 
+						continue
+					if suffixed_candidate in SuffixedCandidateDict:
+						SuffixedCandidateDict[suffixed_candidate].m_ParseCount += 1
+					else: # add it 
+						suffixed_entry = LexiconEntry(suffixed_candidate)
+						suffixed_entry.m_ParseCount = 1
+						suffixed_entry.m_Subwords = [word0, word1]
+						SuffixedCandidateDict[suffixed_candidate] = suffixed_entry
+
+						
+		# Behind the scenes, try a parse with these additional words
+		# to distinguish false suffixes and exclude unlikely formations
+		temp_lexicon = copy.deepcopy(self)
+		for candidate, entry in SuffixedCandidateDict.iteritems():
+			temp_lexicon.AddEntry(candidate, entry)
+			
+		temp_lexicon.ComputeDictFrequencies()
+		temp_lexicon.ParseCorpus (current_iteration, outfile)   # (no actual print to outfile occurs)
+
+		
+		# Compare counts from before and after the parse
+		DeltaDict = dict()
+		for key, entry in SuffixedCandidateDict.iteritems():
+			BeforeParseCount = entry.m_ParseCount
+		        AfterParseCount = temp_lexicon.m_EntryDict[key].m_ParseCount
+		        DeltaDict[key]  = AfterParseCount - BeforeParseCount
+
+		ListOrderedByDelta = sorted(DeltaDict.iteritems(),key=operator.itemgetter(1), reverse=True)
+
+		if True:            # OUTPUT COUNTS TO A FILE - CAN BE STUDIED IN EXCEL
+			i = datetime.datetime.now()
+			timelabel = "%s_%s_%s.%s%s" % (i.year, i.month, i.day, i.hour, i.minute)
+			countsoutfilename = "Suffixiter" + str(stop_iteration_number)+"_LinkPreceding.Counts.11a." + timelabel + ".txt"
+			counts_outfile = open(countsoutfilename, "w")		
+			print >> counts_outfile, "   SuffixedCandidate        Before       After     Subword0    Subword1        Delta"   
+			for key, delta in ListOrderedByDelta:
+				expr = ""
+				for x in SuffixedCandidateDict[key].m_Subwords:
+		        		expr = expr + "%12s" % (x)
+				print >> counts_outfile, "%22s  %10s  %10s %-30s  %5s" % \
+				(key, \
+				SuffixedCandidateDict[key].m_ParseCount,        # BeforeParseCount \
+				temp_lexicon.m_EntryDict[key].m_ParseCount,     # AfterParseCount  \
+				expr, delta)
+			counts_outfile.close()
+
+		# USE THE DELTA INFORMATION TO DISTINGUISH FALSE SUFFIXES
+		# Future work--
+		FalseSuffixList = ['of', 'the', 'to']
+		DeltaThreshold = 10
+		# ADD COMMENTS ABOUT DECIDING WHICH ONES TO USE TO EXTEND THE LEXICON 
+		# e.g., This candidate does not use a false suffix
+		# and is capable of revising parsing in portions in which it was obscured by a previous best parse (productive?)
+
+
+		latex_data= list()
+		latex_data.append("piece   count   subword    subword   status")
+		for key, delta in ListOrderedByDelta:
+			if delta < DeltaThreshold:
+				break
+			s_entry = SuffixedCandidateDict[key]
+			if s_entry.m_Subwords[1] in FalseSuffixList:
+				continue
+			
+			# This candidate has passed both tests for admission to the lexicon at the current iteration.
+			admitted_entry = self.AddEntry(key, s_entry)
+			
+			# for the trace
+			admitted_entry.m_CountRegister.append((current_iteration, s_entry.m_ParseCount, 0, []))  # as in UpdateRegister()
+			for word in admitted_entry.m_Subwords:
+				self.m_EntryDict[word].m_ReprCount += 1
+	                	self.m_EntryDict[word].m_Extwords.append(key)
+	                	self.m_EntryDict[word].m_NewExtwords.append(key)  #will go into this word's m_CountRegister to display along with changed counts 
+			                                                                                   	
+			# for display			
+		        expr = ""
+		        for word in admitted_entry.m_Subwords:
+		        	expr = expr + "%12s" % (word)
+			print "%22s  %10s %-50s" % (key, '{:,}'.format(s_entry.m_ParseCount), expr)  # NEED format??
+			latex_data.append(key +  "\t" + '{:,} {}'.format(s_entry.m_ParseCount, expr) )
+		
+		
+		MakeLatexTable(latex_data,outfile)
+	
 # ---------------------------------------------------------#
 	def Expectation(self):
 		self.m_NumberOfHypothesizedRunningWords = 0
@@ -741,9 +794,12 @@ class Lexicon:
 			
 
 # ---------------------------------------------------------#
-	def ExtendLexicon(self, iteration_number, howmany, outfile):
+	def ExtendLexicon(self, method, iteration_number, howmany, outfile):
 		self.FilterZeroCountEntries()
-		self.GenerateCandidates(iteration_number, howmany, outfile)
+		if method == "standard":
+			self.GenerateCandidates_standardmethod(iteration_number, howmany, outfile)
+		else: #so method == "suffix"
+			self.GenerateCandidates_suffixmethod()
 		self.ComputeDictFrequencies()   # uses ParseCount info from previous parse and GenerateCandidates()
 		                                # uses ReprCount info from Filter...() and Generate...()
 		                                
@@ -770,7 +826,7 @@ class Lexicon:
 
 
 # ---------------------------------------------------------#
-#	def Stabilize(self, iteration_number, outfile):  # Parse a second time with no further additions to lexicon
+#	def Stabilize(self, iteration_number, outfile):  # Parse a second time with no further additions to lexicon (an experiment)
 #		self.FilterZeroCountEntries()
 #
 #		self.ComputeDictFrequencies()   # uses ParseCount info from previous parse and GenerateCandidates()
@@ -800,7 +856,9 @@ stop_iteration_number = 151   # Index of last iteration to perform in this run (
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
-outfilename = "wordbreaker-brownC-" + str(prev_iteration_number+1) + "i.." + str(stop_iteration_number) + "i.txt"
+i = datetime.datetime.now()
+timelabel = ".%s_%s_%s.%s%s" % (i.year, i.month, i.day, i.hour, i.minute)
+outfilename = "wordbreaker-brownC-" + str(prev_iteration_number+1) + "i.." + str(stop_iteration_number) + "i" + timelabel + ".txt"
 outfile 	= open (outfilename, "w")
 #############################################
 
@@ -812,18 +870,6 @@ if prev_iteration_number == 0:
 else:
 	print "LOADING SAVED STATE..."
 	this_lexicon.LoadState(prev_iteration_number)
-	
-############## March 5, 2015     
-if True:   #take in the suffixes from Linguistica
-	suffix_infile_name  = "Corpus" + str(prev_iteration_number) + "_1_Mini1_Suffixes.txt"
-	suffix_outfile_name = "Corpus" + str(prev_iteration_number) + ".Suffixes_extracted.txt"
-	#stemList   = this_lexicon.ExtractListFromLing413File("C200_ling413.2015_03_04._1_Mini1_Stems.txt", "C200_ling413.Stems_extracted.txt", 1)
-	suffixList = this_lexicon.ExtractListFromLing413File(suffix_infile_name, suffix_outfile_name, 0) 
-	#this_lexicon.AddSuffixMark(suffixList)   # ADD BACK IN WHEN RUN FROM #
-	print "Suffix List from", suffix_infile_name
-	for suffix in suffixList:
-		print suffix
-################## March 5, 2015
 
 
 t_start = time.time()          # 2014_07_20
@@ -831,34 +877,14 @@ for current_iteration in range(1+prev_iteration_number, 1+stop_iteration_number)
 	print "\nIteration number", current_iteration
 	print >>outfile, "\nIteration number", current_iteration
 
-	if True:  # alternative to ExtendLexicon()
-		SuffixIdentDict = this_lexicon.ApplySuffixIdent(suffixList)
-		this_lexicon.ComputeDictFrequencies()   # uses ParseCount info from previous parse and GenerateCandidates()
-		                                	# uses ReprCount info from Filter...() and Generate...()                                
-		this_lexicon.m_LexiconCost = this_lexicon.m_InitialLexCost	
-		for key, entry in this_lexicon.m_EntryDict.iteritems():
-			this_lexicon.m_LexiconCost += entry.m_ReprCount *  -1 * math.log(entry.m_Frequency, 2)         
+	# For now, edit to set the method for extending the lexicon
+	# method = "standard"
+	method = "suffix"
 
-	
-	#this_lexicon.ExtendLexicon(current_iteration, howmanycandidatesperiteration, outfile)	
+	this_lexicon.ExtendLexicon(method, current_iteration, howmanycandidatesperiteration, outfile)	
 	this_lexicon.ParseCorpus (current_iteration, outfile)
 	this_lexicon.Report(current_iteration, outfile)
 	
-	
-	if True:    # SHOW BEFORE AND AFTER COUNTS FOR SUFFIXES
-		countsoutfilename = "Suffixiter" + str(stop_iteration_number)+"_LinkFollowing.Counts.11a.2015_03_20.931pm.txt" 
-		counts_outfile = open(countsoutfilename, "w")
-		for key, entry in SuffixIdentDict.iteritems():   # this holds the BeforeParse count
-			# for display
-			expr = ""
-			for x in entry.m_Subwords:
-		        	expr = expr + "%12s" % (x)
-		        AfterParseCount = this_lexicon.m_EntryDict[key].m_ParseCount
-			#print "%15s  %10s  %10s %-50s" % (key, '{:,}'.format(entry.m_ParseCount), '{:,}'.format(AfterParseCount), expr)
-			print >> counts_outfile, "%22s  %10s  %10s %-50s" % (key, '{:,}'.format(entry.m_ParseCount), '{:,}'.format(AfterParseCount), expr)
-
-	
-	# this_lexicon.Stabilize(current_iteration, outfile)	
 this_lexicon.PrintPrecisionRecall(outfile)
 this_lexicon.PrintLexicon(outfile)
 this_lexicon.PrintParsedCorpus(outfile)
@@ -888,7 +914,7 @@ print
 outfile.close()
 
 print "SAVING...Move to a separate labelled directory if desired to prevent subsequent overwriting"
-pickle_folder = "PklFolder." + countsoutfilename
+pickle_folder = "PklFolder." + str(stop_iteration_number) + method + timelabel
 this_lexicon.SaveState(pickle_folder)
 
 
