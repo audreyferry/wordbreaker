@@ -150,6 +150,7 @@ class Lexicon:
 				
 				print "---> Deleted ", key
 				print >>outfile, "---> Deleted ", key
+				
 	# ---------------------------------------------------------#
 	def UpdateLexEntryRegisters(self, iteration_number):
 	        for key, entry in self.m_EntryDict.iteritems():
@@ -391,7 +392,7 @@ class Lexicon:
 				if Piece in self.m_EntryDict:		
 					if verboseflag: print >>outfile,"   %5s" % "Yes.",	
 					
-					if Piece == word: continue        # TEMPORARY TO TEST "duringthepast"
+					#if Piece == word: continue        # TEMPORARY TO TEST "duringthepast"
 					
 					CompressedSizeFromInnerScanToOuterScan = -1 * math.log( self.m_EntryDict[Piece].m_Frequency, 2 )				
 					newvalue =  BestCompressedLength[innerscan]  + CompressedSizeFromInnerScanToOuterScan  
@@ -481,11 +482,15 @@ class Lexicon:
 
 	# ---------------------------------------------------------#
 	def GenerateCandidates_suffixmethod(self):    	# Similar to GenerateCandidates() [renamed as GenerateCandidates_standardmethod]
+	
+		# POSSIBLY REWORK THIS TO USE SEPARATE DICTIONARY FOR EACH SUFFIX   April 15, 2015
+		# MORE EFFICIENT, AND COULD SUPPORT INDIVIDUAL TUNING FOR EACH SUFFIX
 
 		# Take in the suffixes from Linguistica
-		suffix_infile_name  = "Corpus" + str(prev_iteration_number) + "_1_Mini1_Suffixes.txt"
-		suffix_outfile_name = "Corpus" + str(prev_iteration_number) + ".Suffixes_extracted.txt"
-		suffixList = this_lexicon.ExtractListFromLing413File(suffix_infile_name, suffix_outfile_name, 0) 
+		suffix_infile_name  = "Corpus" + str(current_iteration - 1) + "_1_Mini1_Suffixes.txt"
+		suffix_outfile_name = "Corpus" + str(current_iteration - 1) + ".Suffixes_extracted.txt"
+		suffixList = this_lexicon.ExtractListFromLing413File(suffix_infile_name, suffix_outfile_name, 0)
+		suffixList.sort()
 		#this_lexicon.AddSuffixMark(suffixList)   # PUT THIS IN WHEN VERSION HAS m_Suffix
 		print "Suffix List from", suffix_infile_name
 		for suffix in suffixList:
@@ -532,42 +537,143 @@ class Lexicon:
 
 		ListOrderedByDelta = sorted(DeltaDict.iteritems(),key=operator.itemgetter(1), reverse=True)
 
-		if True:            # OUTPUT COUNTS TO A FILE - CAN BE STUDIED IN EXCEL
+		if True:            # OUTPUT COUNTS TO A FILE - CAN BE STUDIED IN EXCEL 
 			i = datetime.datetime.now()
 			timelabel = "%s_%s_%s.%s%s" % (i.year, i.month, i.day, i.hour, i.minute)
-			countsoutfilename = "Suffixiter" + str(stop_iteration_number)+"_LinkPreceding.Counts.11a." + timelabel + ".txt"
+			#BETTER: worddeltas_outfilename    and above: DELTA INFO BY WORD
+			countsoutfilename = "Suffixiter" + str(current_iteration)+"_LinkPreceding.Counts.11a." + timelabel + ".txt"
 			counts_outfile = open(countsoutfilename, "w")		
-			print >> counts_outfile, "   SuffixedCandidate        Before       After     Subword0    Subword1        Delta"   
+			print >> counts_outfile, "     SuffixedCandidate      Before       After     Subword0    Subword1        Delta"   
 			for key, delta in ListOrderedByDelta:
 				expr = ""
 				for x in SuffixedCandidateDict[key].m_Subwords:
 		        		expr = expr + "%12s" % (x)
 				print >> counts_outfile, "%22s  %10s  %10s %-30s  %5s" % \
 				(key, \
-				SuffixedCandidateDict[key].m_ParseCount,        # BeforeParseCount \
-				temp_lexicon.m_EntryDict[key].m_ParseCount,     # AfterParseCount  \
-				expr, delta)
+				'{:,}'.format(SuffixedCandidateDict[key].m_ParseCount),        # BeforeParseCount \
+				'{:,}'.format(temp_lexicon.m_EntryDict[key].m_ParseCount),     # AfterParseCount  \
+				expr, '{:,}'.format(delta))
 			counts_outfile.close()
 
+
+		if True:	# COLLECT AND OUTPUT DELTA INFO BY SUFFIX
+		        # The following quantities are accumulated per suffix based on delta values of the words formed on that suffix.
+			MiddleBandLimit = 1   # SET THIS
+			if MiddleBandLimit == 0:
+				NegMidBandLimit = -1
+			else:
+				NegMidBandLimit = -1 * MiddleBandLimit
+
+			
+			StemCount_upside   = dict()
+			StemCount_downside = dict()
+			
+			TotalBeforeParse_upside   = dict()
+			TotalBeforeParse_downside = dict()
+			
+			TotalAfterParse_upside   = dict()
+			TotalAfterParse_downside = dict()
+			
+			
+			for suffix in suffixList:
+				StemCount_upside[suffix]   = 0
+				StemCount_downside[suffix] = 0
+				TotalBeforeParse_upside[suffix]   = 0
+				TotalBeforeParse_downside[suffix] = 0			
+				TotalAfterParse_upside[suffix]    = 0
+				TotalAfterParse_downside[suffix]  = 0
+				
+			for key, delta in ListOrderedByDelta:
+				s_entry = SuffixedCandidateDict[key]
+				suffix = s_entry.m_Subwords[1]
+				
+				if delta >= MiddleBandLimit:
+					StemCount_upside[suffix] += 1
+					TotalBeforeParse_upside[suffix] += s_entry.m_ParseCount
+					TotalAfterParse_upside[suffix]  += temp_lexicon.m_EntryDict[key].m_ParseCount
+					
+				elif delta <= NegMidBandLimit:
+					StemCount_downside[suffix] += 1
+					TotalBeforeParse_downside[suffix] += s_entry.m_ParseCount
+					TotalAfterParse_downside[suffix]  += temp_lexicon.m_EntryDict[key].m_ParseCount
+					
+			# OUTPUT
+			# LOOKING FOR USEFUL PATTERNS; MOST LIKELY THIS IS NOT THE FINAL FORM   
+			suffixstats_outfilename = "SuffixStats" + str(current_iteration) + "_" + str(MiddleBandLimit) + "." + timelabel + ".txt"
+			suffixstats_outfile = open(suffixstats_outfilename, "w")
+			print >> suffixstats_outfile, "  Suffix  StemsU  StemsD   Pre-U   Pre-D   PostU   PostD  DeltaU  DeltaD  DeltaAll   Up/Down"
+			
+			TotalDeltas_upside = dict()
+			TotalDeltas_downside = dict()
+			TotalDeltas = dict()
+			UpDownRatio = dict()
+			for suffix in suffixList:
+				TotalDeltas_upside[suffix]   = TotalAfterParse_upside[suffix]     - TotalBeforeParse_upside[suffix]
+				TotalDeltas_downside[suffix] = TotalAfterParse_downside[suffix]   - TotalBeforeParse_downside[suffix]
+				TotalDeltas[suffix] = TotalDeltas_upside[suffix] + TotalDeltas_downside[suffix]
+				if TotalDeltas_downside[suffix] != 0:
+					UpDownRatio[suffix] = float(TotalDeltas_upside[suffix])/float(abs(TotalDeltas_downside[suffix]))
+				else:
+					UpDownRatio[suffix] = TotalDeltas_upside[suffix]				
+				# may also decide to output an average over something or things tbd
+				
+				print >> suffixstats_outfile, "%8s  %6s  %6s  %6s  %6s  %6s  %6s  %6s  %6s  %8s  %8s"  %  \
+					(suffix, \
+					'{:,}'.format(StemCount_upside[suffix]),          \
+					'{:,}'.format(StemCount_downside[suffix]),        \
+					'{:,}'.format(TotalBeforeParse_upside[suffix]),   \
+					'{:,}'.format(TotalBeforeParse_downside[suffix]), \
+					'{:,}'.format(TotalAfterParse_upside[suffix]),    \
+					'{:,}'.format(TotalAfterParse_downside[suffix]),  \
+					'{:,}'.format(TotalDeltas_upside[suffix]),        \
+					'{:,}'.format(TotalDeltas_downside[suffix]),      \
+					'{:,}'.format(TotalDeltas[suffix]),               \
+					'{:,.2f}'.format(UpDownRatio[suffix]))
+			
+				
+	
+	
 		# USE THE DELTA INFORMATION TO DISTINGUISH FALSE SUFFIXES
 		# Future work--
-		FalseSuffixList = ['of', 'the', 'to']
-		DeltaThreshold = 10
+		SuffixDeltaLimit = 1
+		WordDeltaLimit = 1
+		print >> outfile, "False suffixes according to SuffixDeltaLimit = ", SuffixDeltaLimit, ":"		
+		for suffix in suffixList:
+			if TotalDeltas[suffix] < SuffixDeltaLimit:  # MAY HAVE MORE CONDITIONS! e.g. UpDownRatio
+				print >> outfile, "%8s  %8s" % \
+				(suffix, '{:,}'.format(TotalDeltas[suffix]))
+				
+		
+		#FalseSuffixList = ['be', 'is', 'of', 'ofthe', 'to']
+		#DeltaThreshold = 1
 		# ADD COMMENTS ABOUT DECIDING WHICH ONES TO USE TO EXTEND THE LEXICON 
 		# e.g., This candidate does not use a false suffix
 		# and is capable of revising parsing in portions in which it was obscured by a previous best parse (productive?)
 
 
+		# THIS IS THE GOAL OF ALL THE PRECEDING WORK
+		# Add qualified suffixed candidates to the lexicon
 		latex_data= list()
 		latex_data.append("piece   count   subword    subword   status")
 		for key, delta in ListOrderedByDelta:
-			if delta < DeltaThreshold:
+			if delta < WordDeltaLimit:
 				break
-			s_entry = SuffixedCandidateDict[key]
-			if s_entry.m_Subwords[1] in FalseSuffixList:
-				continue
+				
+			s_entry = SuffixedCandidateDict[key]        # Don't condense this with next line! s_entry is needed below.
+			suffix = s_entry.m_Subwords[1]
 			
-			# This candidate has passed both tests for admission to the lexicon at the current iteration.
+			if TotalDeltas[suffix] < SuffixDeltaLimit:  # Don't use any word formed on a suffix with this property
+				continue   
+				
+			if TotalDeltas_downside[suffix] != 0:  # and == 0 would be a good feature 
+				if UpDownRatio[suffix] < 1.8:  # Don't use any word formed on a suffix with this property, either
+					continue
+			
+			if delta < 2:
+				if suffix=='d' or suffix=='ary':
+					continue
+			
+			# This candidate word has passed both tests for admission to the lexicon at the current iteration.
 			admitted_entry = self.AddEntry(key, s_entry)
 			
 			# for the trace
@@ -798,7 +904,7 @@ class Lexicon:
 		self.FilterZeroCountEntries()
 		if method == "standard":
 			self.GenerateCandidates_standardmethod(iteration_number, howmany, outfile)
-		else: #so method == "suffix"
+		elif method == "suffix": # if no method specified, no new candidates will be generated
 			self.GenerateCandidates_suffixmethod()
 		self.ComputeDictFrequencies()   # uses ParseCount info from previous parse and GenerateCandidates()
 		                                # uses ReprCount info from Filter...() and Generate...()
@@ -847,12 +953,14 @@ def PrintList(my_list, outfile):
 		print >>outfile, item,  
 
 
+# N.B. It appears that all variables used below are global.
+#      Not necessary to pass them as parameters for functions.
 
 ############ USER SETTINGS ##################
 total_word_count_in_parse =0
 g_encoding =  "asci"  
 prev_iteration_number = 150   # Index of last saved iteration ('0' for fresh start)
-stop_iteration_number = 151   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
+stop_iteration_number = 152   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
@@ -879,7 +987,11 @@ for current_iteration in range(1+prev_iteration_number, 1+stop_iteration_number)
 
 	# For now, edit to set the method for extending the lexicon
 	# method = "standard"
-	method = "suffix"
+	# method = "suffix"
+	if (current_iteration % 25 == 1):
+		method = "suffix"
+	else:
+		method = "standard"
 
 	this_lexicon.ExtendLexicon(method, current_iteration, howmanycandidatesperiteration, outfile)	
 	this_lexicon.ParseCorpus (current_iteration, outfile)
