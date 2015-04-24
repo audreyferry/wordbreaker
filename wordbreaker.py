@@ -169,7 +169,7 @@ class Lexicon:
 	                	self.m_EntryDict[key].m_Suffix = False
 
 	# ---------------------------------------------------------#
-	def ExtractListFromLing413File(self, infilename, outfilename, column):
+	def ExtractListFromLing413File(self, infilename, outfilename, column):   # NOTE: "NULL" is left out
 		infile  = codecs.open(infilename, encoding='utf-16')
 		outfile = codecs.open(outfilename, "w", encoding='ascii')
 		morphemeList = list()
@@ -181,6 +181,8 @@ class Lexicon:
 			if len(pieces) <= 1 or pieces[0] == '#':
 				continue
 			morpheme = pieces[column]
+			if morpheme == "NULL":
+				continue
 			morphemeList.append(morpheme)
 			if morpheme in self.m_EntryDict:
 				print >> outfile, "0  ", morpheme
@@ -482,9 +484,6 @@ class Lexicon:
 
 	# ---------------------------------------------------------#
 	def GenerateCandidates_suffixmethod(self):    	# Similar to GenerateCandidates() [renamed as GenerateCandidates_standardmethod]
-	
-		# POSSIBLY REWORK THIS TO USE SEPARATE DICTIONARY FOR EACH SUFFIX   April 15, 2015
-		# MORE EFFICIENT, AND COULD SUPPORT INDIVIDUAL TUNING FOR EACH SUFFIX
 
 		# Take in the suffixes from Linguistica
 		suffix_infile_name  = "Corpus" + str(current_iteration - 1) + "_1_Mini1_Suffixes.txt"
@@ -528,23 +527,22 @@ class Lexicon:
 		temp_lexicon.ParseCorpus (current_iteration, outfile)   # (no actual print to outfile occurs)
 
 		
-		# Compare counts from before and after the parse
-		DeltaDict = dict()
+		# Compare counts from before and after the parse  (increase is good!)
+		DeltaByWord = dict()
 		for key, entry in SuffixedCandidateDict.iteritems():
 			BeforeParseCount = entry.m_ParseCount
 		        AfterParseCount = temp_lexicon.m_EntryDict[key].m_ParseCount
-		        DeltaDict[key]  = AfterParseCount - BeforeParseCount
+		        DeltaByWord[key]  = AfterParseCount - BeforeParseCount
 
-		ListOrderedByDelta = sorted(DeltaDict.iteritems(),key=operator.itemgetter(1), reverse=True)
+		WordListOrderedByDelta = sorted(DeltaByWord.iteritems(),key=operator.itemgetter(1), reverse=True)
 
 		if True:            # OUTPUT COUNTS TO A FILE - CAN BE STUDIED IN EXCEL 
 			i = datetime.datetime.now()
 			timelabel = "%s_%s_%s.%s%s" % (i.year, i.month, i.day, i.hour, i.minute)
-			#BETTER: worddeltas_outfilename    and above: DELTA INFO BY WORD
-			countsoutfilename = "Suffixiter" + str(current_iteration)+"_LinkPreceding.Counts.11a." + timelabel + ".txt"
-			counts_outfile = open(countsoutfilename, "w")		
+			counts_outfilename = "WordDeltaCounts_" + str(current_iteration)+"." + timelabel + ".txt"
+			counts_outfile = open(counts_outfilename, "w")		
 			print >> counts_outfile, "     SuffixedCandidate      Before       After     Subword0    Subword1        Delta"   
-			for key, delta in ListOrderedByDelta:
+			for key, delta in WordListOrderedByDelta:
 				expr = ""
 				for x in SuffixedCandidateDict[key].m_Subwords:
 		        		expr = expr + "%12s" % (x)
@@ -556,141 +554,153 @@ class Lexicon:
 			counts_outfile.close()
 
 
-		if True:	# COLLECT AND OUTPUT DELTA INFO BY SUFFIX
-		        # The following quantities are accumulated per suffix based on delta values of the words formed on that suffix.
-			MiddleBandLimit = 1   # SET THIS
-			if MiddleBandLimit == 0:
-				NegMidBandLimit = -1
-			else:
-				NegMidBandLimit = -1 * MiddleBandLimit
+		# COLLECT AND OUTPUT DELTA INFO BY SUFFIX
+		MiddleBandLimit = 1   # SET THIS
+		if MiddleBandLimit == 0:
+			NegMidBandLimit = -1
+		else:
+			NegMidBandLimit = -1 * MiddleBandLimit
 
+		# COLLECT
+		# The quantities below are accumulated per suffix based on delta values of the words formed on that suffix.
+		CountPosDeltas  = dict()    # how many words formed on given suffix have a positive delta
+		CountNegDeltas  = dict()
+		CountZeroDeltas = dict()
 			
-			StemCount_upside   = dict()
-			StemCount_downside = dict()
+		SumPosDeltas = dict()       # sum of their delta values
+		SumNegDeltas = dict()
 			
-			TotalBeforeParse_upside   = dict()
-			TotalBeforeParse_downside = dict()
-			
-			TotalAfterParse_upside   = dict()
-			TotalAfterParse_downside = dict()
-			
-			
-			for suffix in suffixList:
-				StemCount_upside[suffix]   = 0
-				StemCount_downside[suffix] = 0
-				TotalBeforeParse_upside[suffix]   = 0
-				TotalBeforeParse_downside[suffix] = 0			
-				TotalAfterParse_upside[suffix]    = 0
-				TotalAfterParse_downside[suffix]  = 0
-				
-			for key, delta in ListOrderedByDelta:
-				s_entry = SuffixedCandidateDict[key]
-				suffix = s_entry.m_Subwords[1]
-				
-				if delta >= MiddleBandLimit:
-					StemCount_upside[suffix] += 1
-					TotalBeforeParse_upside[suffix] += s_entry.m_ParseCount
-					TotalAfterParse_upside[suffix]  += temp_lexicon.m_EntryDict[key].m_ParseCount
-					
-				elif delta <= NegMidBandLimit:
-					StemCount_downside[suffix] += 1
-					TotalBeforeParse_downside[suffix] += s_entry.m_ParseCount
-					TotalAfterParse_downside[suffix]  += temp_lexicon.m_EntryDict[key].m_ParseCount
-					
-			# OUTPUT
-			# LOOKING FOR USEFUL PATTERNS; MOST LIKELY THIS IS NOT THE FINAL FORM   
-			suffixstats_outfilename = "SuffixStats" + str(current_iteration) + "_" + str(MiddleBandLimit) + "." + timelabel + ".txt"
-			suffixstats_outfile = open(suffixstats_outfilename, "w")
-			print >> suffixstats_outfile, "  Suffix  StemsU  StemsD   Pre-U   Pre-D   PostU   PostD  DeltaU  DeltaD  DeltaAll   Up/Down"
-			
-			TotalDeltas_upside = dict()
-			TotalDeltas_downside = dict()
-			TotalDeltas = dict()
-			UpDownRatio = dict()
-			for suffix in suffixList:
-				TotalDeltas_upside[suffix]   = TotalAfterParse_upside[suffix]     - TotalBeforeParse_upside[suffix]
-				TotalDeltas_downside[suffix] = TotalAfterParse_downside[suffix]   - TotalBeforeParse_downside[suffix]
-				TotalDeltas[suffix] = TotalDeltas_upside[suffix] + TotalDeltas_downside[suffix]
-				if TotalDeltas_downside[suffix] != 0:
-					UpDownRatio[suffix] = float(TotalDeltas_upside[suffix])/float(abs(TotalDeltas_downside[suffix]))
-				else:
-					UpDownRatio[suffix] = TotalDeltas_upside[suffix]				
-				# may also decide to output an average over something or things tbd
-				
-				print >> suffixstats_outfile, "%8s  %6s  %6s  %6s  %6s  %6s  %6s  %6s  %6s  %8s  %8s"  %  \
-					(suffix, \
-					'{:,}'.format(StemCount_upside[suffix]),          \
-					'{:,}'.format(StemCount_downside[suffix]),        \
-					'{:,}'.format(TotalBeforeParse_upside[suffix]),   \
-					'{:,}'.format(TotalBeforeParse_downside[suffix]), \
-					'{:,}'.format(TotalAfterParse_upside[suffix]),    \
-					'{:,}'.format(TotalAfterParse_downside[suffix]),  \
-					'{:,}'.format(TotalDeltas_upside[suffix]),        \
-					'{:,}'.format(TotalDeltas_downside[suffix]),      \
-					'{:,}'.format(TotalDeltas[suffix]),               \
-					'{:,.2f}'.format(UpDownRatio[suffix]))
-			
-				
-	
-	
-		# USE THE DELTA INFORMATION TO DISTINGUISH FALSE SUFFIXES
-		# Future work--
-		SuffixDeltaLimit = 1
-		WordDeltaLimit = 1
-		print >> outfile, "False suffixes according to SuffixDeltaLimit = ", SuffixDeltaLimit, ":"		
 		for suffix in suffixList:
-			if TotalDeltas[suffix] < SuffixDeltaLimit:  # MAY HAVE MORE CONDITIONS! e.g. UpDownRatio
-				print >> outfile, "%8s  %8s" % \
-				(suffix, '{:,}'.format(TotalDeltas[suffix]))
+			CountPosDeltas[suffix]  = 0
+			CountNegDeltas[suffix]  = 0
+			CountZeroDeltas[suffix] = 0
 				
-		
-		#FalseSuffixList = ['be', 'is', 'of', 'ofthe', 'to']
-		#DeltaThreshold = 1
-		# ADD COMMENTS ABOUT DECIDING WHICH ONES TO USE TO EXTEND THE LEXICON 
-		# e.g., This candidate does not use a false suffix
-		# and is capable of revising parsing in portions in which it was obscured by a previous best parse (productive?)
+			SumPosDeltas[suffix] = 0
+			SumNegDeltas[suffix] = 0				
+				
+		for key, delta in WordListOrderedByDelta:
+			suffix = SuffixedCandidateDict[key].m_Subwords[1]
+				
+			if delta >= MiddleBandLimit:
+				CountPosDeltas[suffix] += 1
+				SumPosDeltas[suffix] += delta
+			elif delta <= NegMidBandLimit:
+				CountNegDeltas[suffix] += 1
+				SumNegDeltas[suffix] += delta
+			else:
+				CountZeroDeltas[suffix] +=1
+					
+		# OUTPUT
+		# LOOKING FOR USEFUL PATTERNS; MOST LIKELY THIS IS NOT THE FINAL FORM   
+		suffixstats_outfilename = "SuffixDeltaStats_"  + str(MiddleBandLimit) + "_" + str(current_iteration) + "." + timelabel + ".txt"
+		suffixstats_outfile = open(suffixstats_outfilename, "w")
+		print >> suffixstats_outfile, "  Suffix    #Pos    #Neg   #Zero    #All  SumPos  SumNeg  DeltaTotal    PNRatio     ROI"
+			
+		CountAllDeltas = dict()
+		DeltaTotal = dict()
+		PosNegRatio = dict()
+		ROI = dict()
+		for suffix in suffixList:
+			CountAllDeltas[suffix] = CountPosDeltas[suffix] + CountNegDeltas[suffix] + CountZeroDeltas[suffix]
+			DeltaTotal[suffix] = SumPosDeltas[suffix] + SumNegDeltas[suffix]
+				
+			ROI[suffix] = float(DeltaTotal[suffix]) / float(CountAllDeltas[suffix])
+				
+			if SumNegDeltas[suffix] != 0:
+				PosNegRatio[suffix] = float(SumPosDeltas[suffix]) / float(abs(SumNegDeltas[suffix]))
+			else:
+				PosNegRatio[suffix] = SumPosDeltas[suffix]				
+			# may also decide to output an average over something or things tbd
+				
+			print >> suffixstats_outfile, "%8s  %6s  %6s  %6s  %6s  %6s  %6s  %9s  %9s  %8s"  %  \
+				(suffix, \
+				'{:,}'.format(CountPosDeltas[suffix]),        \
+				'{:,}'.format(CountNegDeltas[suffix]),        \
+				'{:,}'.format(CountZeroDeltas[suffix]),       \
+				'{:,}'.format(CountAllDeltas[suffix]),        \
+				'{:,}'.format(SumPosDeltas[suffix]),          \
+				'{:,}'.format(SumNegDeltas[suffix]),          \
+				'{:,}'.format(DeltaTotal[suffix]),            \
+				'{:,.2f}'.format(PosNegRatio[suffix]),        \
+				'{:,.2f}'.format(ROI[suffix]))
+					
+		suffixstats_outfile.close()		
+			
 
+				
+		# SET UP A USEFUL DATA STRUCTURE
+		FromSuffixToWords = dict()    # key - suffix 
+		for suffix in suffixList:     # value - list of (word, delta) pairs for that suffix, listed by delta in descending order
+			FromSuffixToWords[suffix] = []
+			
+		for key, delta in WordListOrderedByDelta:
+			this_suffix = SuffixedCandidateDict[key].m_Subwords[1]
+			FromSuffixToWords[this_suffix].append((key, delta))
+
+			
+		# FOR EACH SUFFIX, SET A THRESHOLD BASED ON DELTA PROPERTIES FOR WHICH OF ITS 
+		# ASSOCIATED WORDS SHOULD GO INTO THE LEXICON
+		Cutoff = dict()  # Key: proposed suffix
+		                 # Value: minimum delta for a word in its list to qualify for the lexicon		                 
+		                 
+		# These parameters must be set; so far they look OK for English. 
+		DeltaTotalLimit = 1
+		PosNegRatioLimit = 1.9
+		ROILimit = .1
+		DefaultWordDeltaLimit = 1    # This is the standard expectation for words formed on a real suffix.
+		
+		for suffix in FromSuffixToWords:
+			if DeltaTotal[suffix] < DeltaTotalLimit:	# Clearly a false suffix! Don't admit any word from its list.
+				Cutoff[suffix] = sys.maxsize
+				
+			elif PosNegRatio[suffix] < PosNegRatioLimit:	# May or may not be a real suffix, but likely that many items
+				Cutoff[suffix] = sys.maxsize		# in its list are not real stem+suffix formations.
+				
+			elif ROI[suffix] < ROILimit:			# similar to preceding case
+				Cutoff[suffix] = sys.maxsize
+				
+			elif (CountPosDeltas[suffix] < CountNegDeltas[suffix] and \
+				CountNegDeltas[suffix] < CountZeroDeltas[suffix]):     # Probably a real suffix, but this property indicates
+				Cutoff[suffix] = DefaultWordDeltaLimit + 1             # that more bad formations occur.
+				
+			else:
+				Cutoff[suffix] = DefaultWordDeltaLimit	# A real, well-behaved suffix!
+				
+		if True:
+			print >> outfile, "Cutoff values for suffixed words:"		
+			for suffix in suffixList:
+				print >> outfile, "%8s  %8s" % \
+				(suffix, '{:,}'.format(Cutoff[suffix]))
+				
 
 		# THIS IS THE GOAL OF ALL THE PRECEDING WORK
 		# Add qualified suffixed candidates to the lexicon
 		latex_data= list()
-		latex_data.append("piece   count   subword    subword   status")
-		for key, delta in ListOrderedByDelta:
-			if delta < WordDeltaLimit:
-				break
-				
-			s_entry = SuffixedCandidateDict[key]        # Don't condense this with next line! s_entry is needed below.
-			suffix = s_entry.m_Subwords[1]
-			
-			if TotalDeltas[suffix] < SuffixDeltaLimit:  # Don't use any word formed on a suffix with this property
-				continue   
-				
-			if TotalDeltas_downside[suffix] != 0:  # and == 0 would be a good feature 
-				if UpDownRatio[suffix] < 1.8:  # Don't use any word formed on a suffix with this property, either
-					continue
-			
-			if delta < 2:
-				if suffix=='d' or suffix=='ary':
-					continue
-			
-			# This candidate word has passed both tests for admission to the lexicon at the current iteration.
-			admitted_entry = self.AddEntry(key, s_entry)
-			
-			# for the trace
-			admitted_entry.m_CountRegister.append((current_iteration, s_entry.m_ParseCount, 0, []))  # as in UpdateRegister()
-			for word in admitted_entry.m_Subwords:
-				self.m_EntryDict[word].m_ReprCount += 1
-	                	self.m_EntryDict[word].m_Extwords.append(key)
-	                	self.m_EntryDict[word].m_NewExtwords.append(key)  #will go into this word's m_CountRegister to display along with changed counts 
+		latex_data.append("piece   count   subword    subword")
+		
+		for suffix in FromSuffixToWords:
+			for (word, delta) in FromSuffixToWords[suffix]:
+				if delta >= Cutoff[suffix]:
+					admitted_entry = self.AddEntry(word, SuffixedCandidateDict[word])
+
+					# for the trace
+					admitted_entry.m_CountRegister.append((current_iteration, admitted_entry.m_ParseCount, 0, []))  # as in UpdateRegister()
+					for subword in admitted_entry.m_Subwords:
+						self.m_EntryDict[subword].m_ReprCount += 1
+	                			self.m_EntryDict[subword].m_Extwords.append(word)
+	                			self.m_EntryDict[subword].m_NewExtwords.append(word)  #will go into this word's m_CountRegister to display along with changed counts 
 			                                                                                   	
-			# for display			
-		        expr = ""
-		        for word in admitted_entry.m_Subwords:
-		        	expr = expr + "%12s" % (word)
-			print "%22s  %10s %-50s" % (key, '{:,}'.format(s_entry.m_ParseCount), expr)  # NEED format??
-			latex_data.append(key +  "\t" + '{:,} {}'.format(s_entry.m_ParseCount, expr) )
-		
-		
+					# for display			
+		        		expr = ""
+		        		for subword in admitted_entry.m_Subwords:
+		        			expr = expr + "%12s" % (subword)
+					print "%22s %8s %8s   %-50s" % (word,  '{:,}'.format(delta), '{:,}'.format(admitted_entry.m_ParseCount), expr)
+					latex_data.append(word +  "\t" + '{:,} {}'.format(admitted_entry.m_ParseCount, expr) )
+					# DESIRABLE TO DISPLAY DELTA -- NEED HELP MAKING IT WORK!
+
+				else:
+					break    # deltas are descending, so go on to the next suffix
+							
 		MakeLatexTable(latex_data,outfile)
 	
 # ---------------------------------------------------------#
