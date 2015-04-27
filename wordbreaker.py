@@ -681,7 +681,7 @@ class Lexicon:
 		for suffix in FromSuffixToWords:
 			for (word, delta) in FromSuffixToWords[suffix]:
 				if delta >= Cutoff[suffix]:
-					admitted_entry = self.AddEntry(word, SuffixedCandidateDict[word])
+					admitted_entry = self.AddEntry(word, temp_lexicon.m_EntryDict[word])   # Use expected count for this initial, pre-parse entry
 
 					# for the trace
 					admitted_entry.m_CountRegister.append((current_iteration, admitted_entry.m_ParseCount, 0, []))  # as in UpdateRegister()
@@ -921,7 +921,7 @@ class Lexicon:
 		                                
 		self.m_LexiconCost = self.m_InitialLexCost	
 		for key, entry in self.m_EntryDict.iteritems():
-			self.m_LexiconCost += entry.m_ReprCount *  -1 * math.log(entry.m_Frequency, 2)         
+			self.m_LexiconCost += entry.m_ReprCount *  -1 * math.log(entry.m_Frequency, 2)
 
 
 # ---------------------------------------------------------#
@@ -970,7 +970,7 @@ def PrintList(my_list, outfile):
 total_word_count_in_parse =0
 g_encoding =  "asci"  
 prev_iteration_number = 150   # Index of last saved iteration ('0' for fresh start)
-stop_iteration_number = 152   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
+stop_iteration_number = 153   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
