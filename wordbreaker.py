@@ -604,10 +604,13 @@ class Lexicon:
 			CountAllDeltas[suffix] = CountPosDeltas[suffix] + CountNegDeltas[suffix] + CountZeroDeltas[suffix]
 			DeltaTotal[suffix] = SumPosDeltas[suffix] + SumNegDeltas[suffix]
 				
-			ROI[suffix] = float(DeltaTotal[suffix]) / float(CountAllDeltas[suffix])
+			if CountAllDeltas[suffix] != 0:
+				ROI[suffix] = float(DeltaTotal[suffix]) / CountAllDeltas[suffix]
+			else:
+				ROI[suffix] = 0
 				
 			if SumNegDeltas[suffix] != 0:
-				PosNegRatio[suffix] = float(SumPosDeltas[suffix]) / float(abs(SumNegDeltas[suffix]))
+				PosNegRatio[suffix] = float(SumPosDeltas[suffix]) / abs(SumNegDeltas[suffix])
 			else:
 				PosNegRatio[suffix] = SumPosDeltas[suffix]				
 			# may also decide to output an average over something or things tbd
@@ -878,7 +881,8 @@ class Lexicon:
 		total_break_precision = float(total_true_positive_for_break) /  total_number_of_hypothesized_words 
 		total_break_recall    = float(total_true_positive_for_break) /  total_number_of_true_words 	
 		print "Precision  %6.4f; Recall  %6.4f" %(total_break_precision ,total_break_recall)
-		print >>outfile, "Precision", total_break_precision, "recall", total_break_recall
+		print >>outfile, "Precision", total_break_precision, "   Recall", total_break_recall
+		print >>outfile, "Hypothesized words", total_number_of_hypothesized_words, "  True words", total_number_of_true_words
 		print >>outfile, "\n***"
 		self.m_PrecisionRecallHistory.append((iteration_number,  total_break_precision,total_break_recall))
 
@@ -970,7 +974,7 @@ def PrintList(my_list, outfile):
 total_word_count_in_parse =0
 g_encoding =  "asci"  
 prev_iteration_number = 150   # Index of last saved iteration ('0' for fresh start)
-stop_iteration_number = 153   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
+stop_iteration_number = 154   # Index of last iteration to perform in this run (so #cycles for this run = stop_iteration_number - prev_iteration_number) 
 howmanycandidatesperiteration = 25
 numberoflines =  0
 corpusfilename = "../../data/english/browncorpus.txt"
@@ -999,6 +1003,8 @@ for current_iteration in range(1+prev_iteration_number, 1+stop_iteration_number)
 	# method = "standard"
 	# method = "suffix"
 	if (current_iteration % 25 == 1):
+		method = "suffix"
+	elif (current_iteration == 138):
 		method = "suffix"
 	else:
 		method = "standard"
