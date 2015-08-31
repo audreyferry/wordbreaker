@@ -1,0 +1,134 @@
+Release Notes
+August 27, 2015
+These notes describe features of the first version of wordbreaker.py in the lxa2015 repository
+which combines previous work by John Goldsmith, Jackson Lee, Audrey Ferry, and the lxa2015 group.
+
+The "Release Notes" format is used here in preference to a commit message because of the length of
+the comments. However, the approach is similar: namely, a brief description is given of the differences
+from the preceding repository version.
+
+In the case of this first release, the changes are grouped into two sections: those which affect
+observed numerical output and those which concern instead organization, extra features, or coding details.
+
+_________________________________
+
+
+CHANGES WHICH AFFECT NUMERICAL OUTPUT
+
+1. Change all math.log calculations from ln to base 2 log.
+
+
+2. In ReadBrokenCorpus(), replace "line" (from broken corpus) by "this_line" (from unbroken corpus)
+when building up the initial dictionary for the unbroken corpus. The difference is spaces and newline
+characters. This changes the initial calculated dictionary cost, but has no other effect.
+
+
+3. In python, the sort order of items which are tied with respect to the sort key can vary unpredictably
+across different program versions, even when code differences are logically unrelated to the sorting.
+In wordbreaker's GenerateCandidates(), a dictionary of new candidate words is sorted by occurrence count,
+from which a small specified number starting from the top of the list are to be admitted into the lexicon
+at the current iteration. If the cutoff point for the iteration happens to occur within a tied region,
+then after even a minor code change the candidates accepted at that iteration may not be the same. The
+effect on performance and cost can be surprisingly strong.
+
+In this release, this "nuisance" variation is removed by extending acceptance of candidate words to
+all those which are tied with the one at the cutoff point. In a future version, after testing, a
+secondary sort key will be used instead.
+
+
+4. In the breakpoint-based portion of RecallPrecision(),
+the per-line contribution to 'total_number_of_true_words' appears in the older version as
+        'number_of_true_words = len(truth) -1';
+for consistency with other calculations, it's replaced in this release by
+        'number_of_true_words = len(truth)'.
+
+Here 'truth' for a given line is the list of its breakpoints in the original broken corpus, with an
+additional break deliberately inserted before the ending punctuation mark. The issue is probably whether
+the end punctuation should count as a true word for the purpose of break recall and precision. For any
+line where the end punctuation gets parsed as a separate word, within this function it is in fact tallied
+into the value of 'true_positive_for_break'. If it's counted as true_positive, then it certainly needs
+to be counted as true in order for break recall to make sense.
+
+With this modification, the quantities
+         total_number_of_true_words
+         total_number_of_hypothesized_words
+computed in this function agree, respectively, with
+         this_lexicon.m_NumberOfTrueRunningWords
+         this_lexicon.m_NumberOfHypothesizedRunningWords
+computed earlier in the processing.
+
+This modification affects only the value calculated for break recall (for every iteration and also for
+the startup parse consisting of single-character words, where now break recall = 1). Additionally, as a
+result of the investigation, the code for this portion of RecallPrecision() is simplified in this release.
+
+________________________________
+
+
+CHANGES WHICH DO NOT AFFECT NUMERICAL OUTPUT (with one exception *)
+1. PROGRAM ORGANIZATION  In this release, the code is arranged to clarify that, for a given iteration:
+   (a) the dictionary is updated at the beginning of the iteration and its cost calculated;
+   (b) then the corpus is parsed in accordance with that dictionary and its cost calculated;
+   (c) then all outputs for that iteration are reported and all necessary history entries recorded.
+
+In part (a) here, the dictionary update is taken to be additions, deletions, and frequency calculation.
+*Here is the exception mentioned above:
+If a dictionary word is not used in the parse at iteration k, according to this release the deletion
+occurs at the beginning of iteration k+1. In previous versions, the deletion was considered to occur
+at iteration k. Note that the parse at iteration k is unaffected by whether that word is in the dictionary
+or not. The only difference is whether the cost of the dictionary reported at iteration k includes or omits
+the cost of the unused word.
+
+One call per iteration to ComputeDictFrequencies() is eliminated in this release. Also, since it's so
+simple, the initial parsing step (at startup) is accomplished by directly assigning proper values
+to instance variables within the function ReadBrokenCorpus() instead of by calling ParseCorpus().
+
+
+2. DISPLAY  To support development, more information about word construction is displayed onscreen and in
+output files, as follows:
+
+When new candidate words for a given iteration are listed onscreen, the words from which they're
+constructed (their "parent words") are displayed as well. The same display appears on the main
+output file.
+
+In the lexicon output file, each dictionary entry begins with some attendant information
+in the following format:
+    this_word     this_word.m_frequency      plog
+    parentword0/parentword1
+Below this, count history from this_word.m_CountRegister is displayed as before, with the addition of
+words for which this_word is a parent (its "child words") shown alongside the count at the appropriate
+iteration numbers.
+
+When a word is deleted from the dictionary, its entry is transferred unchanged to the Lexicon object's
+m_DeletionDict. The DeletionDict is shown on the lexicon output file below the regular dictionary.
+
+
+3. Various small adjustments occur throughout the code to support changes described in preceding
+items 1 and 2.
+
+
+4. RESUME PROCESSING  Added capability to complete a run and later restart from that point.
+This is accomplished by using jsonpickle to record the entire Lexicon object to a file at the end
+of a run and then to reload it at the beginning of a successive run.
+Here is an excerpt from the jsonpickle documentation at https://jsonpickle.github.io:
+
+    jsonpickle is a Python library for serialization and deserialization of complex
+    Python objects to and from JSON. The standard Python libraries for encoding Python
+    into JSON, such as the stdlib's json, simplejson, and demjson, can only handle
+    Python primitives that have a direct JSON equivalent (e.g. dicts, lists, strings,
+    ints, etc.). jsonpickle builds on top of these libraries and allows more complex
+    data structures to be serialized to JSON.
+
+The output is human-readable but at least for now not attractively formatted. Most information of
+interest is available on other output files. If needed, however, a user could manipulate the JSON
+file to find and even edit particular information.
+
+The command line option "--cycles = " (to specifiy how many cycles to run) in earlier versions is
+replaced in this release by "--ibase = " and "--itarget = ", where ibase specifies the iteration level
+attained prior to this run and itarget sets the level that this run should reach. If ibase ≠ 0, then
+a jsonpickle file to be loaded must also be specified using the option "--statefile = ".
+
+To prevent overwriting, all output files from a given run land in a directory labelled with date
+and time as well as start and end iteration numbers. Since identification is critical, the jsonpickle
+file inside this directory is labelled the same way. The user may of course delete unneeded output
+directories and/or files and rename others as desired.
+
