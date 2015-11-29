@@ -7,9 +7,6 @@
 
 # audrey  08/2015
 # TODO: In ReadBrokenCorpus(), separate additional punctuation marks from preceding word. e.g. comma
-# TODO: Fix RecallPrecision -- as of Aug. 23, just see if it can be made simpler
-# m_LetterDict  may not be needed.
-# Remove extra processing from ComputeDictFrequencies
 
 
 import os
@@ -30,7 +27,6 @@ from lxa5lib import (get_language_corpus_datafolder, json_pdump,
                      load_config_for_command_line_help)
 
 
-# Jan 6: added precision and recall.
 
 
 def makeArgParser(configfilename="config.json"):
@@ -111,11 +107,10 @@ class LexiconEntry:
 # ---------------------------------------------------------#
 class Lexicon:
     def __init__(self):
-        self.m_LetterDict=dict()
         self.m_LetterPlog = dict()
         self.m_EntryDict = dict()
         self.m_TrueDictionary = dict()
-        self.m_DictionaryCost = 0   #in bits! Check this is base 2, looks like default base in python
+        self.m_DictionaryCost = 0   #in bits!
         self.m_Corpus     = list()
         self.m_SizeOfLongestEntry = 0
         self.m_CorpusCost = 0.0
@@ -131,7 +126,7 @@ class Lexicon:
         self.m_DictionaryCostHistory = list()
         self.m_CorpusCostHistory = list()
 
-    # ---------------------------------------------------------#  NEED TO CHANGE ALL USES OF THIS
+    # ---------------------------------------------------------#  
     #def AddEntry(self,key,count):
     #    this_entry = LexiconEntry(key,count)
     #    self.m_EntryDict[key] = this_entry
@@ -145,6 +140,7 @@ class Lexicon:
             self.m_SizeOfLongestEntry = len(key)
         return self.m_EntryDict[key]
     # ---------------------------------------------------------#
+
     # Found bug here July 5 2015: important, don't let it remove a singleton letter! John
     # don't del key-value pairs within still iterating through the pairs among the dict; fix by John Goldsmith July 6 2015
     def FilterZeroCountEntries(self, outfile):
@@ -177,7 +173,7 @@ class Lexicon:
     #-------------------------------------------------------#
     def ReadBrokenCorpus(self, infilepathname, outfile, howmuchcorpus):
         print("Name of data file: ", infilepathname)
-        if not os.path.isfile(infilepathname):  # Note: checked at startup by get_language_corpus_datafolder()
+        if not os.path.isfile(infilepathname):  # Note: already checked at startup by get_language_corpus_datafolder()
             print("Warning:", infilepathname, "does not exist.")
             print("Check file paths and names.")
             sys.exit()
@@ -222,9 +218,10 @@ class Lexicon:
             self.m_Corpus.append(this_line)                    # by unbroken line
             self.m_BreakPointList.append(breakpoint_list_forline)  # build up unbroken corpus
 
-        print("# " + str(len(self.m_TrueDictionary)) + " distinct words in the original corpus.", file=outfile)   # Goes into header
+        print("# " + str(len(self.m_TrueDictionary)) + " distinct words in the original corpus.", file=outfile)   # Goes into outfile header
 
-
+		#----------------------------#
+		
         # AT THIS POINT WE HAVE
             # the data:        m_Corpus         unbroken text
             # the dictionary:  m_EntryDict      initial version, entries for single characters
@@ -236,7 +233,6 @@ class Lexicon:
         self.m_NumberOfHypothesizedRunningWords = 0
         for (key, entry) in self.m_EntryDict.items():
             self.m_NumberOfHypothesizedRunningWords += entry.m_Count
-
 
         # PLOGS
         self.m_CorpusCost = 0.0
@@ -253,60 +249,8 @@ class Lexicon:
             entry.m_CountRegister.append((0, entry.m_Count, []))  # iteration_number, count, childwords  as in UpdateRegister()
 
 
-
-
-        # Delete several lines
-        # HERE IS INITIAL LEXICON INFORMATION
-        # At this point the only entries in the lexicon are single characters.
-
-        #numSymbols = len(self.m_EntryDict)
-        #self.m_InitialLexCost = numSymbols * math.log(numSymbols, 2)  NO--CHANGED TO  m_DictionaryCost
-        #self.m_LexiconCost = self.m_InitialLexCost
-
-        # For a given entry e, m_ReprCount tallies the number of other entries in the <<lexicon>> which use e in their composition.
-        # So at this point m_ReprCount == 0 for each entry.
-        # Note also that, at this point, for each entry its m_Count records the number of occurrences in the <<corpus>> of a particular single character.
-
-
-        # LOGICALLY PRIOR TO THE INITIAL PARSE    # InitialValues   InitialMetrics  InitialCosts   Establish   InitialCalculations   Basis
-        #self.ComputeDictFrequencies()  # determines best coding for pointers to entries
-        #self.m_SizeOfLongestEntry = 1
-        #for key, entry in self.m_EntryDict.items():
-            #entry.m_CountRegister.append((0, entry.m_Count, 0, []))  # iteration_number|parse count|repr count|new extwords  as in UpdateRegister()
-            #self.m_LetterPlog[key] = -1 * math.log(entry.m_Frequency, 2)
-            #print("key = ", key, "    plog = ", self.m_LetterPlog[key])   # PROBABLY OMIT THIS
-
-
-        # AND COSTS
-        #self.m_CorpusCost = 0.0
-        #self.m_DictionaryCost = 0.0
-        #for key, entry in self.m_EntryDict.items():
-            #self.m_CorpusCost += entry.m_Count *  -1 * math.log(entry.m_Frequency, 2)
-            #self.m_DictionaryCost += self.m_LetterPlog[key]
-
-        # AUGUST 15, 2015  LEAVE THIS HERE FOR NOW  --  SO I CAN TEST.
-        # MAY REPLACE BY A CALL TO REPORT() ONCE I GET THAT PART ALL FIGURED OUT CORRECTLY.
-        # FOR ITERATION 0, THEIR VERSION CONCERNS ONLY COSTS, NOT ALL THE STUFF NEEDED FOR RECALL AND PRECISION AND THE HISTORIES
         print("\n Startup")
-
-        # COMMENTED OUT TO TEST Report()   August 23, 2015
-        #print ("Cost: ")
-        #print ("-%16s" % 'Corpus: ',    "{0:18,.4f}".format(self.m_CorpusCost))
-        #print ("-%16s" % 'Dictionary: ',   "{0:18,.4f}".format(self.m_DictionaryCost))
-        #print ("-%16s" % 'Combined: ',  "{0:18,.4f}".format(self.m_CorpusCost + self.m_DictionaryCost))
-
-        #print ("Cost: ", file=outfile)
-        #print ("-%16s" % 'Corpus: ',     "{0:18,.4f}".format(self.m_CorpusCost), file=outfile)
-        #print ("-%16s" % 'Dictionary: ', "{0:18,.4f}".format(self.m_DictionaryCost), file=outfile)
-        #print ("-%16s" % 'Combined: ',   "{0:18,.4f}".format(self.m_CorpusCost + self.m_DictionaryCost), file=outfile)
-
         self.Report(0, outfile)
-
-
-        ##RECORD THE TRUE DICTIONARY
-        #print >>outfile, "\n\nTRUE DICTIONARY\n"
-        #for word in sorted(self.m_TrueDictionary.iterkeys()):
-        #    print >>outfile,  "%20s %10s" % (word, "{:,}".format(self.m_TrueDictionary[word]))
 
         infile.close()
 
@@ -318,27 +262,21 @@ class Lexicon:
             TotalCount += entry.m_Count
         for (key, entry) in self.m_EntryDict.items():
             entry.m_Frequency = entry.m_Count/float(TotalCount)
-        #TotalCount = 0
-        #for (letter, count) in self.m_LetterDict.items():
-            #TotalCount += count
-        #for (letter, count) in self.m_LetterDict.items():
-            #self.m_LetterDict[letter] = float(count)/float(TotalCount)
-            #self.m_LetterPlog[letter] = -1 * math.log(self.m_LetterDict[letter], 2)
-            #print ("letter= ", letter, "   plog = ", self.m_LetterPlog[letter])
 # ---------------------------------------------------------#
-    # added july 2015 john
-    def ComputeDictionaryLength(self):
-        DictionaryCost = 0
-        for word in self.m_EntryDict:
-            wordlength = 0
-            letters = list(word)
-            for letter in letters:
-                wordlength += self.m_LetterPlog[letter]
-            DictionaryLength += wordlength
-        self.m_DictionaryCost = DictionaryCost
-        self.m_DictionaryCostHistory.append(DictionaryCost)
+#    # added july 2015 john
+#    def ComputeDictionaryLength(self):
+#        DictionaryCost = 0
+#        for word in self.m_EntryDict:
+#            wordlength = 0
+#            letters = list(word)
+#            for letter in letters:
+#                wordlength += self.m_LetterPlog[letter]
+#            DictionaryLength += wordlength
+#        self.m_DictionaryCost = DictionaryCost
+#        self.m_DictionaryCostHistory.append(DictionaryCost)
+#
+# ---------------------------------------------------------#
 
-# ---------------------------------------------------------#
     def ParseCorpus(self, current_iteration, outfile):
         self.m_ParsedCorpus = list()
         self.m_CorpusCost = 0.0
@@ -353,19 +291,6 @@ class Lexicon:
             for word in parsed_line:
                 self.m_EntryDict[word].m_Count +=1
                 self.m_NumberOfHypothesizedRunningWords += 1
-
-
-        #self.FilterZeroCountEntries(current_iteration)
-        #self.ComputeDictFrequencies()
-        #self.ComputeDictionaryLength()
-        #print("\nCorpus     cost:", "{:,}".format(int(self.m_CorpusCost)))
-        #print("Dictionary cost:", "{:,}".format(int(self.m_DictionaryLength)))
-        #sum = int(self.m_CorpusCost + self.m_DictionaryLength)
-        #print("Total      cost:", "{:,}".format(sum))
-        #print("\nCorpus cost:", "{:,}".format(self.m_CorpusCost), file=outfile)
-        #print("Dictionary cost:", "{:,}".format(self.m_DictionaryLength), file=outfile)
-
-        return
 # ---------------------------------------------------------#
     def PrintParsedCorpus(self,outfile):
         for line in self.m_ParsedCorpus:
@@ -479,11 +404,8 @@ class Lexicon:
                 self.AddEntry(nominee,entry)                                           # This records the initial count--before parsing.
                                                                                           # If the actual count used in the parse differs,
                                                                                           # both records will appear for this iteration in the CountRegister.
-
                 # for the trace
                 for word in entry.m_ParentWords:
-                    #self.m_EntryDict[word].m_ReprCount += 1
-                    #self.m_EntryDict[word].m_Extwords.append(nominee)
                     self.m_EntryDict[word].m_ChildWords.append(nominee)  #will go into m_CountRegister to display along with changed counts
 
                 # for display
@@ -495,9 +417,8 @@ class Lexicon:
 
             MakeLatexTable(latex_data,outfile)
 
-            return NomineeList      # NOTE THAT THE RETURN VALUE IS NOT USED  # July 18, 2015 - Used in updating DictionaryCost (experiment) - was slower
+            return NomineeList      # NOTE THAT THE RETURN VALUE IS NOT USED 
 
-    # ---------------------------------------------------------#
     # ---------------------------------------------------------#
 #   def GenerateCandidates_suffixmethod(self):      # Similar to GenerateCandidates() [renamed as GenerateCandidates_standardmethod]
 #
@@ -725,51 +646,8 @@ class Lexicon:
 #       MakeLatexTable(latex_data,outfile)
 #
 #       return NomineeList      # NOTE THAT THE RETURN VALUE IS NOT USED  # July 18, 2015 - Now used to update DictionaryCost
-
-
-# ---------------------------------------------------------#
-#    def GenerateCandidates(self, howmany, outfile, iterationnumber):
-#        Nominees = dict()
-#        NomineeList = list()
-#        for parsed_line in self.m_ParsedCorpus:
-#            for wordno in range(len(parsed_line)-1):
-#                candidate = parsed_line[wordno] + parsed_line[wordno + 1]
-#                if candidate in self.m_EntryDict:
-#                    continue
-#                if candidate in Nominees:
-#                    Nominees[candidate] += 1
-#                else:
-#                    Nominees[candidate] = 1
-#        EntireNomineeList = sorted(Nominees.items(),key=lambda x:x[1],reverse=True)
 #
-#        ThisCount = 0
-#        for nominee, count in EntireNomineeList:
-#            if nominee  in self.m_DeletionDict:
-#                continue
-#            else:
-#                PreviousCount = ThisCount
-#                ThisCount = count
-#                NomineeList.append((nominee,count))
-#            #if len(NomineeList) == howmany:
-#            #   break
-#            if len(NomineeList) > howmany:
-#                if ThisCount == PreviousCount:
-#                    howmany += 1
-#                else:
-#                    NomineeList = NomineeList[0:-1]
-#                    break
 #
-#        latex_data= list()
-#        latex_data.append("Iteration number " + str(iterationnumber))
-#        latex_data.append("piece   count   status")
-#        for nominee, count in NomineeList:
-#            self.AddEntry(nominee,count)
-#            print("%20s   %8i" %(nominee, count))
-#            latex_data.append(nominee +  "\t" + "{:,}".format(count) )
-#        MakeLatexTable(latex_data, outfile)
-#        self.ComputeDictFrequencies()
-#        return NomineeList
-
 # ---------------------------------------------------------#
     def Expectation(self):
         self.m_NumberOfHypothesizedRunningWords = 0
@@ -1157,7 +1035,6 @@ class Lexicon:
 
         self.m_CorpusCostHistory.append(self.m_CorpusCost)
         self.m_DictionaryCostHistory.append(self.m_DictionaryCost)
-        #self.RecallPrecision(iteration_number, outfile)
         self.RecallPrecision(iteration_number, outfile)
         self.UpdateLexEntryRegisters(iteration_number)
 
@@ -1168,16 +1045,7 @@ def PrintList(my_list, outfile):
     for item in my_list:
         print(item, end=" ", file=outfile)
 
-    # ---------------------------------------------------------#
-
-#def SaveState(obj, outfile_j):
-#    serialstr = jsonpickle.encode(obj)
-#    print(serialstr, file=outfile_j)
-
-#def LoadState(infile_j):
-#    serialstr = infile_j.read()
-#    obj = jsonpickle.decode(serialstr)
-#    return obj
+# ---------------------------------------------------------#
 
 def LoadSavedStateFromFile(statefile, ibase, itarget):
     if not (itarget > ibase):
@@ -1292,7 +1160,6 @@ def main(language, corpus, datafolder,
             print("LOADING SAVED STATE...")
             this_lexicon.LoadState(prev_iteration_number)  # Oops
 
-    #current_iteration = ibase   # I THINK THIS IS NOT NEEDED
     if (ibase == 0 and statefile == None):
         this_lexicon = Lexicon()
         this_lexicon.ReadBrokenCorpus (infile_corpus_pathname, outfile, howmuchcorpus)
@@ -1315,12 +1182,6 @@ def main(language, corpus, datafolder,
         this_lexicon.ParseCorpus (current_iteration, outfile)
         this_lexicon.Report(current_iteration, outfile)
 
-        # THEIRs
-        #this_lexicon.GenerateCandidates(howmanycandidatesperiteration, outfile,current_iteration)  #ExtendLexicon
-        #this_lexicon.ParseCorpus (outfile, current_iteration)                                      #ParseCorpus
-        #this_lexicon.RecallPrecision(current_iteration, outfile)                                   #Report
-        #this_lexicon.UpdateLexEntryRegisters(current_iteration)        # temporary on Aug. 21
-
 
     # COMPLETION
 
@@ -1337,7 +1198,6 @@ def main(language, corpus, datafolder,
     print("[Processing can be continued from this point in a later run ")
     print("by loading this file through the '--statefile = ' command line option.]")
     print()
-    #SaveState(this_lexicon, outfile_jsonpickle)
     serialstr = jsonpickle.encode(this_lexicon)
     print(serialstr, file=outfile_jsonpickle)
 
@@ -1381,5 +1241,4 @@ if __name__ == "__main__":
 
     main(language, corpus, datafolder,
          ibase, itarget, statefile, candidatesperiteration, howmuchcorpus, verboseflag)
-         
 
